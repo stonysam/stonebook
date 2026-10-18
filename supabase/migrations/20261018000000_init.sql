@@ -1,4 +1,4 @@
--- Family Tracker: foundation schema (milestone 1)
+-- Stonebook: foundation schema (milestone 1)
 --
 -- Design rules
 --   * Events are an append-only ledger. "Next due" is derived from events + rules,
@@ -219,7 +219,7 @@ create table public.events (
 create index events_object_idx on public.events(object_id, occurred_on desc);
 
 create or replace function app.forbid_event_change() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = public as $$
 begin
   raise exception 'Events are append-only. Record a correction instead.';
 end $$;
@@ -281,6 +281,10 @@ create table public.rules (
   constraint lead_days_positive check (0 < all(lead_days))
 );
 create index rules_object_idx on public.rules(object_id);
+
+create trigger rules_stamp_created_by
+  before insert or update on public.rules
+  for each row execute function app.stamp_created_by();
 create index rules_owner_idx  on public.rules(owner_id);
 
 -- ---------------------------------------------------------------------------
@@ -382,9 +386,20 @@ create policy rules_update on public.rules for update
   );
 -- No delete policy: rules are switched off (active = false).
 
+-- The app calls this right after Google sign-in (exposed through the public API schema).
+create or replace function public.claim_membership() returns uuid
+language sql security invoker set search_path = public as $$
+  select app.claim_membership()
+$$;
+
 -- ---------------------------------------------------------------------------
--- Grants (Supabase's signed-in role)
+-- Grants. Signed-out visitors (anon) get nothing at all; signed-in users get
+-- table access that row-level security then narrows to what they may see.
 -- ---------------------------------------------------------------------------
+revoke all on all tables in schema public from anon;
+revoke all on all functions in schema public from anon, public;
+revoke all on all functions in schema app from anon, public;
+grant execute on function public.claim_membership() to authenticated;
 grant usage on schema app to authenticated;
 grant execute on all functions in schema app to authenticated;
 grant select on public.effective_events to authenticated;
