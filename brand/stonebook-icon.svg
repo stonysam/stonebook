@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="a-bg" cx="0.3" cy="0.2" r="1">
+      <stop offset="0" stop-color="#58844A"/>
+      <stop offset="1" stop-color="#2D4D2C"/>
+    </radialGradient>
+    <radialGradient id="a-stone" cx="0.36" cy="0.26" r="0.85">
+      <stop offset="0" stop-color="#E8DFCF"/>
+      <stop offset="0.5" stop-color="#BFB29E"/>
+      <stop offset="1" stop-color="#887B68"/>
+    </radialGradient>
+    <clipPath id="a-clip">
+      <path d="M168 562 C158 430 282 300 482 286 C642 276 802 322 860 442 C902 544 832 702 640 762 C470 814 286 762 212 682 C184 650 172 608 168 562 Z"/>
+    </clipPath>
+    <filter id="a-grain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="7"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.25  0 0 0 0 0.21  0 0 0 0 0.17  0 0 0 2.2 -1.05"/>
+    </filter>
+    <filter id="a-mottle" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.011" numOctaves="3" seed="11"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.45  0 0 0 0 0.40  0 0 0 0 0.32  0 0 0 1.4 -0.55"/>
+    </filter>
+    <filter id="a-soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <filter id="a-deboss" x="-30%" y="-30%" width="160%" height="160%">
+      <feOffset in="SourceAlpha" dy="11" result="o1"/>
+      <feGaussianBlur in="o1" stdDeviation="6" result="b1"/>
+      <feComposite in="SourceAlpha" in2="b1" operator="out" result="e1"/>
+      <feFlood flood-color="#3A3128" flood-opacity="0.95"/>
+      <feComposite in2="e1" operator="in" result="shadow"/>
+      <feOffset in="SourceAlpha" dy="-8" result="o2"/>
+      <feGaussianBlur in="o2" stdDeviation="4" result="b2"/>
+      <feComposite in="SourceAlpha" in2="b2" operator="out" result="e2"/>
+      <feFlood flood-color="#F6F0E4" flood-opacity="0.6"/>
+      <feComposite in2="e2" operator="in" result="light"/>
+      <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="shadow"/><feMergeNode in="light"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="228" fill="url(#a-bg)"/>
+  <g transform="translate(512 530) scale(1.08) translate(-512 -530)">
+  <ellipse cx="540" cy="770" rx="340" ry="54" fill="#142613" opacity="0.6" filter="url(#a-soft)"/>
+
+  <g clip-path="url(#a-clip)">
+    <rect width="1024" height="1024" fill="url(#a-stone)"/>
+    <rect width="1024" height="1024" filter="url(#a-mottle)" opacity="0.55"/>
+    <rect width="1024" height="1024" filter="url(#a-grain)" opacity="0.7"/>
+    <ellipse cx="400" cy="345" rx="260" ry="90" fill="#FCF8EF" opacity="0.38" filter="url(#a-soft)"/>
+    <ellipse cx="660" cy="760" rx="320" ry="80" fill="#4E4436" opacity="0.45" filter="url(#a-soft)"/>
+
+    <g transform="translate(516 548) rotate(-9) scale(1.12)" fill="#857868" filter="url(#a-deboss)">
+      <path d="M0 -12 C30 -12 70 24 76 64 C80 96 58 112 34 104 C20 99 10 94 0 94 C-10 94 -20 99 -34 104 C-58 112 -80 96 -76 64 C-70 24 -30 -12 0 -12 Z"/>
+      <ellipse cx="-92" cy="-40" rx="28" ry="40" transform="rotate(-18 -92 -40)"/>
+      <ellipse cx="92" cy="-40" rx="28" ry="40" transform="rotate(18 92 -40)"/>
+      <ellipse cx="-34" cy="-118" rx="30" ry="44" transform="rotate(-5 -34 -118)"/>
+      <ellipse cx="34" cy="-118" rx="30" ry="44" transform="rotate(5 34 -118)"/>
+      <ellipse cx="-106" cy="-92" rx="8" ry="15" transform="rotate(-22 -106 -92)"/>
+      <ellipse cx="106" cy="-92" rx="8" ry="15" transform="rotate(22 106 -92)"/>
+      <ellipse cx="-38" cy="-177" rx="8" ry="15" transform="rotate(-6 -38 -177)"/>
+      <ellipse cx="38" cy="-177" rx="8" ry="15" transform="rotate(6 38 -177)"/>
+    </g>
+  </g>
+  </g>
+</svg>
