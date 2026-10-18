@@ -4,9 +4,11 @@
 // it is recomputed whenever it's needed, so a corrected event automatically
 // corrects every due date that depended on it.
 
-import { addDays, addMonths, daysBetween, minDate, parseDate } from './dates';
+import { addDays, addMonths, daysBetween, isoWeekday, minDate, parseDate } from './dates';
 
-export type RuleKind = 'interval' | 'meter' | 'fixed_date' | 'record';
+export type RuleKind = 'interval' | 'meter' | 'fixed_date' | 'weekly' | 'record';
+
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export interface EventRecord {
   id: string;
@@ -32,6 +34,8 @@ export interface Rule {
   renewEveryMonths?: number | null;
   startsOn?: string | null;
   meterStart?: number | null;
+  /** weekly: ISO weekdays it falls on, 1 = Monday … 7 = Sunday */
+  weekdays?: number[] | null;
   leadDays?: number[];
   overdueRepeatDays?: number;
 }
@@ -113,6 +117,8 @@ export function computeDue(rule: Rule, events: EventRecord[], today: string): Du
       return result(rule, 'record', null, today, 'Keeps history only; nothing falls due.');
     case 'fixed_date':
       return computeFixedDate(rule, effective, today);
+    case 'weekly':
+      return computeWeekly(rule, effective, today);
     case 'interval':
     case 'meter':
       return computeInterval(rule, effective, today);
@@ -270,11 +276,39 @@ function computeFixedDate(rule: Rule, effective: EventRecord[], today: string): 
 }
 
 // ---------------------------------------------------------------------------
+// Weekly on set days (feed the hens Tue and Fri)
+// ---------------------------------------------------------------------------
+/** Next day on or after `from` that falls on one of the weekdays. */
+export function nextWeekday(from: string, weekdays: number[]): string {
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(from, i);
+    if (weekdays.includes(isoWeekday(d))) return d;
+  }
+  throw new Error('weekly rule needs at least one weekday');
+}
+
+function computeWeekly(rule: Rule, effective: EventRecord[], today: string): DueResult {
+  const days = [...new Set(rule.weekdays ?? [])].filter((d) => d >= 1 && d <= 7).sort();
+  const names = days.map((d) => DAY_NAMES[d - 1]).join(', ').replace(/, ([^,]*)$/, ' and $1');
+  const last = effective.filter((e) => sameText(e.kind, rule.eventKind)).at(-1) ?? null;
+
+  // A completion covers the earliest open day, so doing Tuesday's job on Wednesday
+  // still counts for Tuesday and the next one is Friday.
+  const from = last ? addDays(last.occurredOn, 1) : (rule.startsOn ?? today);
+  const dueOn = nextWeekday(from, days);
+  const gap = daysBetween(today, dueOn);
+  const status: DueStatus = gap < 0 ? 'overdue' : gap === 0 ? 'due_soon' : 'ok';
+  const basis = last ? `Every ${names}. Last done ${last.occurredOn}.` : `Every ${names}.`;
+  return result(rule, status, dueOn, today, basis);
+}
+
+// ---------------------------------------------------------------------------
 // Reminders: should the owner be notified about this rule today?
 // ---------------------------------------------------------------------------
 export function shouldNotifyToday(rule: Rule, due: DueResult, today: string): boolean {
   if (!due.dueOn) return false; // usage-only rules without an estimate are notified on crossing (milestone 3)
   const days = daysBetween(today, due.dueOn);
+  if (rule.kind === 'weekly') return days === 0 || days === -1; // on the day, and once the day after
   if (days >= 0) {
     const lead = rule.leadDays?.length ? rule.leadDays : DEFAULT_LEAD;
     return lead.includes(days);

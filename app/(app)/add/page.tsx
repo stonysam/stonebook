@@ -1,0 +1,49 @@
+import Link from 'next/link';
+import { AddForm } from '@/components/add-form';
+import { loadWorld } from '@/lib/world';
+
+export const metadata = { title: 'Add · Stonebook' };
+
+export default async function Add({ searchParams }: { searchParams: Promise<{ type?: string; owner?: string }> }) {
+  const w = await loadWorld();
+  const { type: typeId, owner } = await searchParams;
+  const type = w.types.find((t) => t.id === typeId);
+
+  if (w.me.role === 'child') {
+    return <main className="page"><h1>Add</h1><p>Ask Mum or Dad to add things for you.</p></main>;
+  }
+
+  if (!type) {
+    return (
+      <main className="page">
+        <h1>Add something</h1>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))', gap: 10 }}>
+          {w.types.map((t) => (
+            <Link key={t.id} href={`/add?type=${t.id}${owner ? `&owner=${owner}` : ''}`} className="card"
+              style={{ minHeight: 88, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', textDecoration: 'none', color: 'inherit', fontWeight: 500 }}>
+              {t.name}
+            </Link>
+          ))}
+        </div>
+        {w.me.role !== 'parent' && <p className="small" style={{ margin: 0 }}>You can add things for yourself, like homework or school dates.</p>}
+      </main>
+    );
+  }
+
+  const owners = w.me.role === 'parent' ? w.members : w.members.filter((m) => m.id === w.me.id);
+  return (
+    <main className="page">
+      <Link href="/add" className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>Back</Link>
+      <h1>New {type.name.toLowerCase()}</h1>
+      <AddForm
+        typeId={type.id}
+        typeName={type.name}
+        defs={w.fields.filter((f) => f.object_type_id === type.id)}
+        members={w.members}
+        owners={owners}
+        meId={w.me.id}
+        initialOwner={owners.some((m) => m.id === owner) ? owner! : w.me.id}
+      />
+    </main>
+  );
+}

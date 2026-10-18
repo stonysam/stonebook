@@ -4,7 +4,7 @@ One shared record of everything the family looks after — vehicles, machines, a
 documents, bills, subscriptions and chores — with owners, history and reminders.
 Scope: see the "Stonebook MVP Scope" doc.
 
-## Status: milestone 1 done, milestone 2 next
+## Status: milestone 2 (the app) built, first deploy
 
 | Part | Where | State |
 |---|---|---|
@@ -15,7 +15,11 @@ Scope: see the "Stonebook MVP Scope" doc.
 | Google-only sign-in check | `supabase/migrations/20261018200000_…` | Done, tested |
 | Parent confirmation of kids' chores | same migration | Done, tested (database) |
 | Family feed and emoji reactions | same migration | Done, tested (database) |
-| App screens, Google sign-in UI | — | Next |
+| Weekly "set days" schedules | `src/engine/due.ts`, migrations `20261019…` | Done, tested |
+| App: sign-in, Today, quick log, Things + history search, item and person pages, Add, approvals, feed with reactions, fireworks | `app/`, `components/`, `lib/` | Built; logic tested, screens to be checked on phones |
+| Reminders (push), calendar feed | — | Milestone 3 |
+| Benji's family-device PIN mode | — | Milestone 4 |
+| Photo import | — | Milestone 5 |
 
 ## How it works
 
@@ -51,13 +55,17 @@ Scope: see the "Stonebook MVP Scope" doc.
   (`events.root_id`), so a correction keeps them and isn't announced twice. In-app only, with
   a badge from `feed_seen`; no push.
 
-## Run the tests
+## Run it
 
 ```bash
 npm install
-npm test        # 56 tests: engine + database security rules on real Postgres (PGlite)
+cp .env.example .env.local
+npm run dev        # http://localhost:3000 (add it to Supabase's redirect URLs to sign in locally)
+npm test           # 68 tests: engine, screen logic, database security rules on real Postgres (PGlite)
 npm run typecheck
 ```
+
+Colours and type live in `app/theme.css`; change them there and the whole app follows.
 
 ## Backups
 

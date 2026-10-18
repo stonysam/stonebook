@@ -1,3 +1,8 @@
 node_modules/
 .env*
+!.env.example
 HANDOFF.md
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.vercel

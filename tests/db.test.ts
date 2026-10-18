@@ -407,3 +407,15 @@ describe('family feed and reactions', () => {
     expect(await as('junior', () => rows('select * from feed_seen'))).toEqual([]);
   });
 });
+
+describe('weekly rules', () => {
+  it('a chore on set days needs valid weekdays', async () => {
+    const chore = await as('sam', () => addObject({ name: 'Collect the eggs', type: 'Chore', owner: id.second }));
+    const add = (days: string | null) => as('sam', () => db.query(
+      `insert into rules (object_id, name, kind, event_kind, weekdays, owner_id) values ($1, 'Eggs', 'weekly', 'done', $2::smallint[], $3)`,
+      [chore, days, id.second]));
+    await expect(add('{2,5}')).resolves.toBeTruthy();
+    await expect(add(null)).rejects.toThrow(/weekly_shape/);
+    await expect(add('{8}')).rejects.toThrow(/weekdays_valid/);
+  });
+});

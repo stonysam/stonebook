@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addMonths, todayIn } from '../src/engine/dates';
+import { addMonths, isoWeekday, todayIn } from '../src/engine/dates';
 import { computeDue, effectiveEvents, shouldNotifyToday, type EventRecord, type Rule } from '../src/engine/due';
 
 const ev = (id: string, kind: string, occurredOn: string, extra: Partial<EventRecord> = {}): EventRecord =>
@@ -178,5 +178,43 @@ describe('reminders', () => {
     expect(at('2026-11-16')).toBe(true);   // first day overdue
     expect(at('2026-11-17')).toBe(false);
     expect(at('2026-11-23')).toBe(true);   // a week later
+  });
+});
+
+describe('weekly rules on set days', () => {
+  const hens: Rule = { id: 'hens', kind: 'weekly', eventKind: 'Done', weekdays: [5, 2] };
+
+  it('knows the weekday (18 Oct 2026 is a Sunday)', () => {
+    expect(isoWeekday('2026-10-18')).toBe(7);
+    expect(isoWeekday('2026-10-19')).toBe(1);
+  });
+
+  it('a new chore starts on the next set day', () => {
+    const due = computeDue(hens, [], '2026-10-18');
+    expect(due.dueOn).toBe('2026-10-20');
+    expect(due.status).toBe('ok');
+    expect(due.basis).toBe('Every Tue and Fri.');
+  });
+
+  it('after Tuesday is done, Friday is next: due on the day, overdue after', () => {
+    const events = [ev('1', 'done', '2026-10-20')];
+    expect(computeDue(hens, events, '2026-10-21').dueOn).toBe('2026-10-23');
+    expect(computeDue(hens, events, '2026-10-23').status).toBe('due_soon');
+    expect(computeDue(hens, events, '2026-10-24').status).toBe('overdue');
+  });
+
+  it('a late completion covers the missed day, not the next one', () => {
+    const events = [ev('1', 'done', '2026-10-16'), ev('2', 'done', '2026-10-21')];
+    expect(computeDue(hens, [events[0]], '2026-10-21').status).toBe('overdue'); // Tuesday missed
+    expect(computeDue(hens, events, '2026-10-21').dueOn).toBe('2026-10-23');
+  });
+
+  it('reminds on the day and once the day after', () => {
+    const events = [ev('1', 'done', '2026-10-20')];
+    const at = (today: string) => shouldNotifyToday(hens, computeDue(hens, events, today), today);
+    expect(at('2026-10-22')).toBe(false);
+    expect(at('2026-10-23')).toBe(true);
+    expect(at('2026-10-24')).toBe(true);
+    expect(at('2026-10-25')).toBe(false);
   });
 });

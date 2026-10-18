@@ -50,6 +50,11 @@ export function addMonths(iso: string, months: number): string {
   return format(ny, nm, Math.min(d, daysInMonth(ny, nm)));
 }
 
+/** ISO weekday: 1 = Monday … 7 = Sunday. */
+export function isoWeekday(iso: string): number {
+  return ((dayNumber(iso) + 3) % 7 + 7) % 7 + 1;
+}
+
 export function daysBetween(fromIso: string, toIso: string): number {
   return dayNumber(toIso) - dayNumber(fromIso);
 }
