@@ -1,6 +1,6 @@
 // Runs the real migration against Postgres (PGlite, in-process) and checks the
 // security rules by signing in as each family member.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -22,14 +22,15 @@ const authId = {
   second: 'aaaaaaaa-0000-4000-8000-000000000017',
   junior: 'aaaaaaaa-0000-4000-8000-000000000014',
   stranger: 'aaaaaaaa-0000-4000-8000-0000000000ff',
+  late: 'aaaaaaaa-0000-4000-8000-0000000000aa',
 };
 
 let db: PGlite;
 let typeId: Record<string, string>;
 
-async function as<T>(who: keyof typeof authId, fn: () => Promise<T>, email = `${who}@example.com`): Promise<T> {
+async function as<T>(who: keyof typeof authId, fn: () => Promise<T>, email = `${who}@example.com`, provider = 'google'): Promise<T> {
   await db.query(`select set_config('request.jwt.claim.sub', $1, false), set_config('request.jwt.claims', $2, false)`,
-    [authId[who], JSON.stringify({ sub: authId[who], email })]);
+    [authId[who], JSON.stringify({ sub: authId[who], email, app_metadata: { provider } })]);
   await db.exec('set role authenticated');
   try {
     return await fn();
@@ -54,7 +55,10 @@ let car: string, crystalPassport: string, eldestPassport: string, secondInsuranc
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(sql('./supabase-auth-stub.sql'));
-  await db.exec(sql('../supabase/migrations/20261018000000_init.sql'));
+  const migrations = new URL('../supabase/migrations/', import.meta.url);
+  for (const f of readdirSync(migrations).filter((f) => f.endsWith('.sql')).sort()) {
+    await db.exec(readFileSync(new URL(f, migrations), 'utf8'));
+  }
   await db.exec(sql('../supabase/seed.sql'));
 
   typeId = Object.fromEntries((await rows('select id, name from object_types')).map((r) => [r.name, r.id]));
@@ -91,6 +95,15 @@ describe('sign-in and the allow-list', () => {
     await expect(as('sam', () => rows('select * from member_pins'))).rejects.toThrow(/permission denied/);
     await expect(as('junior', () => db.query(`insert into member_pins (member_id, pin_hash) values ($1, 'x')`, [id.junior])))
       .rejects.toThrow();
+  });
+
+  it('only a Google sign-in can claim a place on the list', async () => {
+    const [m] = await rows(`insert into members (display_name, role, email) values ('Late', 'member', 'late@example.com') returning id`);
+    const viaEmail = await as('late', () => rows('select app.claim_membership() as m'), 'late@example.com', 'email');
+    expect(viaEmail[0].m).toBeNull();
+    expect(await as('late', () => rows('select * from members'), 'late@example.com', 'email')).toEqual([]);
+    const viaGoogle = await as('late', () => rows('select app.claim_membership() as m'), 'late@example.com');
+    expect(viaGoogle[0].m).toBe(m.id);
   });
 
   it('an email that is not on the list gets nothing', async () => {
@@ -252,5 +265,145 @@ describe('rules', () => {
     await expect(as('sam', () => db.query(
       `insert into rules (object_id, name, kind, event_kind, owner_id) values ($1, 'x', 'interval', 'x', $2)`, [car, id.sam])))
       .rejects.toThrow(/interval_shape/);
+  });
+});
+
+describe('kids\' chores wait for a parent', () => {
+  const log = (who: keyof typeof authId, memberId: string, objectId: string, extra = '') =>
+    as(who, () => rows(
+      `insert into events (object_id, kind, occurred_on, created_by${extra ? ', needs_confirmation' : ''})
+       values ($1, 'done', '2026-10-18', $2${extra ? ', false' : ''}) returning id, needs_confirmation`,
+      [objectId, memberId]));
+  const decide = (who: keyof typeof authId, memberId: string, eventId: string, approved: boolean) =>
+    as(who, () => db.query(`insert into confirmations (event_id, approved, decided_by) values ($1, $2, $3)`, [eventId, approved, memberId]));
+
+  let hens: string;
+  beforeAll(async () => {
+    hens = await as('sam', () => addObject({ name: 'Feed the hens', type: 'Chore', owner: id.junior }));
+  });
+
+  it('the 14-year-old\'s chore waits, and the app cannot skip the wait', async () => {
+    const [e] = await log('junior', id.junior, hens, 'try to skip');
+    expect(e.needs_confirmation).toBe(true);
+    expect(await as('crystal', () => rows('select * from effective_events where id = $1', [e.id]))).toEqual([]);
+    expect((await as('crystal', () => rows('select assigned_by from awaiting_confirmation where event_id = $1', [e.id]))))
+      .toEqual([{ assigned_by: id.sam }]);
+    expect((await as('junior', () => rows('select * from awaiting_confirmation where event_id = $1', [e.id]))).length).toBe(1);
+    expect(await as('eldest', () => rows('select * from family_feed where event_id = $1', [e.id]))).toEqual([]);
+  });
+
+  it('17 and 21 count straight away, and so do a kid\'s own chores', async () => {
+    const [byMember] = await log('eldest', id.eldest, hens);
+    expect(byMember.needs_confirmation).toBe(false);
+    const own = await as('junior', () => addObject({ name: 'Tidy my desk', type: 'Chore', owner: id.junior }));
+    const [byJunior] = await log('junior', id.junior, own);
+    expect(byJunior.needs_confirmation).toBe(false);
+  });
+
+  it('only a parent can decide, and the decision is final', async () => {
+    const [e] = await log('junior', id.junior, hens);
+    await expect(decide('junior', id.junior, e.id as string, true)).rejects.toThrow(/row-level security/);
+    await expect(decide('eldest', id.eldest, e.id as string, true)).rejects.toThrow(/row-level security/);
+    await expect(decide('crystal', id.sam, e.id as string, true)).rejects.toThrow(/row-level security/);
+    await decide('crystal', id.crystal, e.id as string, true);
+    await expect(decide('sam', id.sam, e.id as string, false)).rejects.toThrow(/duplicate key/);
+    await expect(as('sam', () => db.query('update confirmations set approved = false where event_id = $1', [e.id])))
+      .rejects.toThrow(/permission denied/);
+
+    expect((await as('sam', () => rows('select * from effective_events where id = $1', [e.id]))).length).toBe(1);
+    expect(await as('sam', () => rows('select * from awaiting_confirmation where event_id = $1', [e.id]))).toEqual([]);
+    const [k] = await rows('select decided_at from confirmations where event_id = $1', [e.id]);
+    const [f] = await as('eldest', () => rows('select announced_at from family_feed where event_id = $1', [e.id]));
+    expect(f.announced_at).toEqual(k.decided_at);
+  });
+
+  it('a refused chore never counts', async () => {
+    const [e] = await log('junior', id.junior, hens);
+    await decide('sam', id.sam, e.id as string, false);
+    expect(await as('sam', () => rows('select * from effective_events where id = $1', [e.id]))).toEqual([]);
+    expect(await as('sam', () => rows('select * from awaiting_confirmation where event_id = $1', [e.id]))).toEqual([]);
+  });
+
+  it('entries that don\'t need a parent can\'t be "confirmed"', async () => {
+    const [e] = await log('eldest', id.eldest, hens);
+    await expect(decide('sam', id.sam, e.id as string, true)).rejects.toThrow(/row-level security/);
+  });
+});
+
+describe('family feed and reactions', () => {
+  const react = (who: keyof typeof authId, memberId: string, eventId: string, emoji: string) =>
+    as(who, () => db.query(`insert into reactions (event_id, member_id, emoji) values ($1, $2, $3)`, [eventId, memberId, emoji]));
+  const feed = (who: keyof typeof authId) => as(who, () => rows('select * from family_feed'));
+
+  let tractor: string, service: string;
+  beforeAll(async () => {
+    tractor = await addObject({ name: 'Zetor', type: 'Machine', owner: id.sam });
+    [{ id: service }] = (await as('sam', () => rows(
+      `insert into events (object_id, kind, occurred_on, created_by) values ($1, 'serviced', '2026-10-18', $2) returning id`,
+      [tractor, id.sam]))) as { id: string }[];
+  });
+
+  it('shows what got done on whole-family items, not personal or private ones', async () => {
+    const [passportRenewal] = await as('crystal', () => rows(
+      `insert into events (object_id, kind, occurred_on, created_by) values ($1, 'renewed', '2026-10-18', $2) returning id`,
+      [crystalPassport, id.crystal]));
+    const [siblingShared] = await as('second', () => rows(
+      `insert into events (object_id, kind, occurred_on, created_by) values ($1, 'renewed', '2026-10-18', $2) returning id`,
+      [secondInsurance, id.second]));
+    const seen = (await feed('eldest')).map((r) => r.event_id);
+    expect(seen).toContain(service);
+    expect(seen).toContain(siblingShared.id);
+    expect((await feed('sam')).map((r) => r.event_id)).not.toContain(passportRenewal.id);
+    expect((await feed('crystal')).map((r) => r.object_name)).not.toContain('Uni deadlines');
+  });
+
+  it('anyone with a login can react with one of the six; nobody else can sign for them', async () => {
+    await react('eldest', id.eldest, service, 'clap');
+    await react('junior', id.junior, service, 'wolf');
+    await expect(react('junior', id.junior, service, 'thumbsdown')).rejects.toThrow(/check constraint/);
+    await expect(react('junior', id.eldest, service, 'fire')).rejects.toThrow(/row-level security/);
+    await expect(react('stranger', id.eldest, service, 'fire')).rejects.toThrow(/row-level security/);
+    const [item] = (await feed('crystal')).filter((r) => r.event_id === service);
+    expect(item.reactions).toEqual([{ emoji: 'clap', member_id: id.eldest }, { emoji: 'wolf', member_id: id.junior }]);
+  });
+
+  it('no reacting to items outside the feed', async () => {
+    const [e] = await as('crystal', () => rows(
+      `insert into events (object_id, kind, occurred_on, created_by) values ($1, 'checked', '2026-10-18', $2) returning id`,
+      [crystalPassport, id.crystal]));
+    await expect(react('sam', id.sam, e.id as string, 'heart')).rejects.toThrow(/row-level security/);
+  });
+
+  it('people can take back their own reaction, not someone else\'s', async () => {
+    await react('sam', id.sam, service, 'star');
+    const other = await as('junior', () => db.query(`delete from reactions where event_id = $1 and member_id = $2`, [service, id.sam]));
+    expect(other.affectedRows).toBe(0);
+    const own = await as('sam', () => db.query(`delete from reactions where event_id = $1 and member_id = $2`, [service, id.sam]));
+    expect(own.affectedRows).toBe(1);
+  });
+
+  it('a correction keeps its reactions and isn\'t announced twice', async () => {
+    const [before] = (await feed('eldest')).filter((r) => r.event_id === service);
+    const [fix] = await as('sam', () => rows(
+      `insert into events (object_id, kind, occurred_on, correction_of, created_by)
+       values ($1, 'serviced', '2026-10-17', $2, $3) returning id, root_id`, [tractor, service, id.sam]));
+    expect(fix.root_id).toBe(service);
+    const items = (await feed('eldest')).filter((r) => r.id === service);
+    expect(items).toHaveLength(1);
+    expect(items[0].event_id).toBe(fix.id);
+    expect(items[0].announced_at).toEqual(before.announced_at);
+    expect(items[0].reactions).toEqual(before.reactions);
+  });
+
+  it('strangers see no feed', async () => {
+    expect(await as('stranger', () => rows('select * from family_feed'), 'stranger@example.com')).toEqual([]);
+  });
+
+  it('each person keeps their own "last seen" for the badge', async () => {
+    await as('eldest', () => db.query(`insert into feed_seen (member_id) values ($1)`, [id.eldest]));
+    await as('eldest', () => db.query(`update feed_seen set seen_at = now() where member_id = $1`, [id.eldest]));
+    await expect(as('eldest', () => db.query(`insert into feed_seen (member_id) values ($1)`, [id.junior])))
+      .rejects.toThrow(/row-level security/);
+    expect(await as('junior', () => rows('select * from feed_seen'))).toEqual([]);
   });
 });

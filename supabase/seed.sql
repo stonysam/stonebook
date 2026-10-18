@@ -1,16 +1,16 @@
 -- Starter object types and fields. Parents can add more from the app.
 -- Run once after the migrations (Supabase runs supabase/seed.sql on `supabase db reset`).
 
-insert into public.object_types (name, icon, sort_order) values
-  ('Person',         'user',     10),
-  ('Vehicle',        'car',      20),
-  ('Machine',        'tractor',  30),
-  ('Animal or flock','paw',      40),
-  ('Home system',    'home',     50),
-  ('Document',       'id-card',  60),
-  ('Bill',           'receipt',  70),
-  ('Subscription',   'repeat',   80),
-  ('Chore',          'check',    90);
+insert into public.object_types (name, icon, sort_order, confirm_kid_logs) values
+  ('Person',         'user',     10, false),
+  ('Vehicle',        'car',      20, false),
+  ('Machine',        'tractor',  30, false),
+  ('Animal or flock','paw',      40, false),
+  ('Home system',    'home',     50, false),
+  ('Document',       'id-card',  60, false),
+  ('Bill',           'receipt',  70, false),
+  ('Subscription',   'repeat',   80, false),
+  ('Chore',          'check',    90, true);
 
 with t as (select id, name from public.object_types)
 insert into public.field_defs (object_type_id, key, label, kind, options, required, sort_order)
