@@ -59,6 +59,11 @@ npm test        # 56 tests: engine + database security rules on real Postgres (P
 npm run typecheck
 ```
 
+## Backups
+
+Free plan: a nightly GitHub workflow keeps the project awake and saves an encrypted copy of the
+data for 30 days. Setup and restore: `docs/backup-and-restore.md`.
+
 ## Setting up Supabase (Sam)
 
 1. Create a Supabase project in the **EU (Frankfurt)** region.

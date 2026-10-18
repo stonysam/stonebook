@@ -1,0 +1,52 @@
+name: Nightly check-in and backup
+
+# Keeps the free Supabase project from pausing (it pauses after a week without activity)
+# and keeps an encrypted copy of the family's data for 30 days. Restore steps:
+# docs/backup-and-restore.md
+
+on:
+  schedule:
+    - cron: '17 1 * * *'  # 02:17 or 03:17 in Prague, depending on daylight saving
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: https://qiddytmxiftsvmwoisuc.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_GZ1mtZdWoe6cUOFsxz602w_50I4LLHB  # public by design
+    steps:
+      - name: Check in with Supabase
+        run: |
+          curl -fsS -o /dev/null "$SUPABASE_URL/auth/v1/health" -H "apikey: $SUPABASE_PUBLISHABLE_KEY"
+
+      - name: Dump the family data
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          test -n "$DB_URL" || { echo "::error::Add the SUPABASE_DB_URL secret (see docs/backup-and-restore.md)"; exit 1; }
+          docker run --rm -e DB_URL postgres:17 \
+            sh -c 'pg_dump "$DB_URL" --data-only --schema=public --no-owner' > stonebook.sql
+          grep -q 'COPY public.members' stonebook.sql || { echo "::error::Dump looks empty"; exit 1; }
+
+      - name: Encrypt
+        env:
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          test -n "$PASSPHRASE" || { echo "::error::Add the BACKUP_PASSPHRASE secret (see docs/backup-and-restore.md)"; exit 1; }
+          name="stonebook-$(date -u +%F).sql.gpg"
+          printf '%s' "$PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+            --symmetric --cipher-algo AES256 -o "$name" stonebook.sql
+          shred -u stonebook.sql
+          echo "BACKUP_FILE=$name" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BACKUP_FILE }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 30
+          if-no-files-found: error
