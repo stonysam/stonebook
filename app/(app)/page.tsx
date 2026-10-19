@@ -40,7 +40,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   const { drivers, names } = driverOptions(w);
 
   return (
-    <main className="page">
+    <main className={`page${recent.length ? ' has-recent' : ''}`}>
       <header>
         <div className="small">{todayHeading(w.today)}</div>
         <h1>{greeting()}, {me.display_name}</h1>
@@ -54,16 +54,6 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       )}
 
       {me.role !== 'child' && <ReminderNudge />}
-
-      {recent.length > 0 && (
-        <nav className="scroll-x" aria-label="Recent things">
-          {recent.map((o) => (
-            <Link key={o.id} href={`/things/${o.id}`} className="chip" style={{ gap: 6 }}>
-              {o.name}<span className="small" style={{ fontSize: 12 }}>{typeOf(w, o)?.name.split(' ')[0]}</span>
-            </Link>
-          ))}
-        </nav>
-      )}
 
       {myPendingApprovals > 0 && (
         <Link href="/approvals" className="card row dashed" style={{ textDecoration: 'none', color: 'inherit', minHeight: 56 }}>
@@ -137,6 +127,18 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           <p style={{ margin: 0 }}>Nothing due{view === 'mine' ? ' for you' : ''}. Enjoy the day.</p>
           <p className="small" style={{ margin: '8px 0 0' }}>Add things and reminders from the Add tab.</p>
         </div>
+      )}
+      {recent.length > 0 && (
+        <nav className="recent-bar" aria-label="Recent things">
+          <div className="recent-inner">
+            <span className="recent-title">Recent things</span>
+            <div className="scroll-x">
+              {recent.map((o) => (
+                <Link key={o.id} href={`/things/${o.id}`} className="chip chip-sm">{o.name}</Link>
+              ))}
+            </div>
+          </div>
+        </nav>
       )}
     </main>
   );
