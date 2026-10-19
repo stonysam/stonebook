@@ -13,14 +13,16 @@ type How = 'none' | 'daily' | 'weekly' | 'interval' | 'meter' | 'date' | 'record
  * In the Add form, things that fall due by nature (bills, documents, chores) ask up front;
  * for the rest (a car, a flock) a reminder is optional and starts folded away.
  */
-export function ScheduleFields({ typeName, members, owner, meId, today, inAddForm = false }: {
+export function ScheduleFields({ typeName, members, owner, meId, today, inAddForm = false, onPeople }: {
   typeName: string; members: MemberRow[]; owner: string; meId: string; today: string; inAddForm?: boolean;
+  /** Chores: tells the Add form who's doing it (a job for others or a group is always shared). */
+  onPeople?: (ids: string[]) => void;
 }) {
   const chore = isChore(typeName);
   const ui = typeUi(typeName);
   const hasMeter = typeName === 'Vehicle' || typeName === 'Machine';
   const options: [How, string][] = chore
-    ? [['weekly', 'On set days'], ['daily', 'Every day'], ['interval', 'Every few weeks'], ['date', 'Just once']]
+    ? [['date', 'Just once'], ['daily', 'Every day'], ['weekly', 'On set days'], ['interval', 'Every few weeks']]
     : [
         ['interval', 'Every few months'],
         ...(hasMeter ? [['meter', 'By km or hours'] as [How, string]] : []),
@@ -32,15 +34,26 @@ export function ScheduleFields({ typeName, members, owner, meId, today, inAddFor
   if (inAddForm && !optional && !chore) options.push(['none', 'No reminder']);
 
   const [open, setOpen] = useState(!optional);
-  const [how, setHow] = useState<How>(chore ? 'weekly' : typeName === 'Document' || typeName === 'Bill' || typeName === 'Subscription' ? 'date' : options[0][0]);
+  const [how, setHow] = useState<How>(chore ? 'date' : typeName === 'Document' || typeName === 'Bill' || typeName === 'Subscription' ? 'date' : options[0][0]);
   const [days, setDays] = useState<number[]>([]);
   const [responsible, setResponsible] = useState<string | null>(null); // null: whoever looks after it
-  const [turns, setTurns] = useState(false);
+  // Chores: who does it, picked once. Several people on something that repeats either do it
+  // together each time (each ticks their own part) or take turns by day.
+  const [people, setPeopleState] = useState<string[]>([owner]);
+  const [together, setTogether] = useState(true);
   const [dayOwner, setDayOwner] = useState<Record<number, string>>({});
   const [by, setBy] = useState<'today' | 'tomorrow' | 'week' | 'pick'>('week');
   const [picked, setPicked] = useState(addDays(today, 7));
+  const [completion, setCompletion] = useState<'done' | 'log'>(chore ? 'done' : 'log');
 
   const who = responsible ?? owner;
+  const setPeople = (ids: string[]) => { setPeopleState(ids); onPeople?.(ids); };
+  const togglePerson = (id: string) => setPeople(people.includes(id) ? (people.length > 1 ? people.filter((x) => x !== id) : people) : [...people, id]);
+  const repeating = how === 'daily' || how === 'weekly';
+  const turns = chore && repeating && people.length > 1 && !together;
+  const turnDays = how === 'daily' ? [1, 2, 3, 4, 5, 6, 7] : days;
+  const ownerForDay = (d: number) => dayOwner[d] ?? people[turnDays.indexOf(d) % people.length] ?? people[0];
+  const sentHow: How = turns && how === 'daily' ? 'weekly' : how;
   const name = (id: string) => (id === meId ? 'Me' : members.find((m) => m.id === id)?.display_name ?? '');
   const toggleDay = (d: number) => setDays((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort()));
   const sunday = addDays(today, (7 - isoWeekday(today)) % 7);
@@ -58,9 +71,7 @@ export function ScheduleFields({ typeName, members, owner, meId, today, inAddFor
     );
   }
 
-  const summary = turns
-    ? days.map((d) => `${WEEKDAYS[d - 1][2].slice(0, 3)} ${name(dayOwner[d] ?? who)}`).join(', ')
-    : WEEKDAYS.filter(([n]) => days.includes(n)).map(([, , full]) => full).join(' and ');
+  const summary = WEEKDAYS.filter(([n]) => days.includes(n)).map(([, , full]) => full).join(' and ');
 
   return (
     <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0, gap: 12 }}>
@@ -69,7 +80,7 @@ export function ScheduleFields({ typeName, members, owner, meId, today, inAddFor
         <span className="spacer" />
         {optional && <button type="button" className="btn btn-text" style={{ minHeight: 32 }} onClick={() => setOpen(false)}>Remove</button>}
       </div>
-      <input type="hidden" name="how" value={how} />
+      <input type="hidden" name="how" value={sentHow} />
       <div className="wrap">
         {options.map(([value, label]) => (
           <button key={value} type="button" className="chip" aria-pressed={how === value} onClick={() => setHow(value)}>{label}</button>
@@ -92,23 +103,10 @@ export function ScheduleFields({ typeName, members, owner, meId, today, inAddFor
               <button key={n} type="button" className="day" aria-pressed={days.includes(n)} aria-label={full} onClick={() => toggleDay(n)}>{short}</button>
             ))}
           </div>
-          {days.map((d) => <input key={d} type="hidden" name="days" value={d} />)}
-          {chore && days.length > 1 && !turns && (
-            <button type="button" className="btn btn-text" style={{ alignSelf: 'flex-start', minHeight: 36 }} onClick={() => setTurns(true)}>
-              Different people on different days?
-            </button>
-          )}
-          {turns && days.map((d) => (
-            <label key={d} className="row" style={{ gap: 12 }}>
-              <span style={{ flex: '0 0 104px' }}>{WEEKDAYS[d - 1][2]}</span>
-              <select style={{ flex: '1 1 auto' }} name={`day_owner_${d}`} value={dayOwner[d] ?? who} onChange={(e) => setDayOwner({ ...dayOwner, [d]: e.target.value })}>
-                {members.map((m) => <option key={m.id} value={m.id}>{name(m.id)}</option>)}
-              </select>
-            </label>
-          ))}
-          <span className="small">{days.length ? `${turns ? 'Turns: ' : 'Every '}${summary}.` : 'Tap the days, e.g. Tuesday and Friday.'}</span>
+          <span className="small">{days.length ? `Every ${summary}.` : 'Tap the days, e.g. Tuesday and Friday.'}</span>
         </div>
       )}
+      {(how === 'weekly' || turns) && turnDays.map((d) => <input key={d} type="hidden" name="days" value={d} />)}
 
       {how === 'interval' && (
         <div className="row">
@@ -175,18 +173,64 @@ export function ScheduleFields({ typeName, members, owner, meId, today, inAddFor
         </>
       )}
 
-      {how !== 'none' && how !== 'record' && !(how === 'weekly' && turns) && !(chore && inAddForm) && (
+      {how !== 'none' && how !== 'record' && !chore && (
         <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="small" style={{ marginBottom: 8 }}>{chore ? 'Who does it?' : 'Who gets reminded?'}</legend>
+          <legend className="small" style={{ marginBottom: 8 }}>Who gets reminded?</legend>
           <div className="wrap">
             {members.map((m) => (
               <button key={m.id} type="button" className="chip" aria-pressed={who === m.id} onClick={() => setResponsible(m.id)}>{name(m.id)}</button>
             ))}
           </div>
-          {!chore && who !== owner && <span className="small">{name(who)} gets this reminder; the item stays with {name(owner)}.</span>}
+          {who !== owner && <span className="small">{name(who)} gets this reminder; the item stays with {name(owner)}.</span>}
         </fieldset>
       )}
-      <input type="hidden" name="responsible" value={who} />
+      {chore && (
+        <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend className="small" style={{ marginBottom: 8 }}>Who does it?</legend>
+          <div className="wrap">
+            {members.map((m) => (
+              <button key={m.id} type="button" className="chip" aria-pressed={people.includes(m.id)} onClick={() => togglePerson(m.id)}>{name(m.id)}</button>
+            ))}
+          </div>
+          {people.length > 1 && repeating && (
+            <div className="seg" role="radiogroup" aria-label="Several people" style={{ marginTop: 4 }}>
+              <button type="button" role="radio" aria-checked={together} className={together ? 'on' : ''} onClick={() => setTogether(true)}>Together each time</button>
+              <button type="button" role="radio" aria-checked={!together} className={!together ? 'on' : ''} onClick={() => setTogether(false)}>Take turns</button>
+            </div>
+          )}
+          {people.length > 1 && (!repeating || together) && <span className="small">A group job: each of them ticks their own part, or taps Abort mission if they weren&apos;t part of it.</span>}
+          {turns && (turnDays.length === 0
+            ? <span className="small">Pick the days above first.</span>
+            : (
+              <div className="card stack" style={{ background: 'var(--surface-2)', border: 0, gap: 6 }}>
+                <span className="small">Whose turn each day (change any):</span>
+                {turnDays.map((d) => (
+                  <label key={d} className="row" style={{ gap: 12 }}>
+                    <span style={{ flex: '0 0 104px' }}>{WEEKDAYS[d - 1][2]}</span>
+                    <select style={{ flex: '1 1 auto' }} name={`day_owner_${d}`} value={ownerForDay(d)} onChange={(e) => setDayOwner({ ...dayOwner, [d]: e.target.value })}>
+                      {people.map((id) => <option key={id} value={id}>{name(id)}</option>)}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            ))}
+          {!turns && people.length > 1 && people.map((id) => <input key={id} type="hidden" name="people" value={id} />)}
+          {inAddForm && <input type="hidden" name="owner_id" value={people[0]} />}
+        </fieldset>
+      )}
+      <input type="hidden" name="responsible" value={chore ? people[0] : who} />
+
+      {how !== 'none' && how !== 'record' && (
+        <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
+          <legend className="small" style={{ marginBottom: 8 }}>When it&apos;s done</legend>
+          <input type="hidden" name="completion" value={completion} />
+          <div className="seg" role="radiogroup" aria-label="When it's done">
+            <button type="button" role="radio" aria-checked={completion === 'done'} className={completion === 'done' ? 'on' : ''} onClick={() => setCompletion('done')}>Tap Done</button>
+            <button type="button" role="radio" aria-checked={completion === 'log'} className={completion === 'log' ? 'on' : ''} onClick={() => setCompletion('log')}>Log details</button>
+          </div>
+          <span className="small">{completion === 'done' ? 'One tap and it’s done, with hearts. Good for chores.' : 'Opens a form for a date, a note or a reading. Good for services and repairs.'}</span>
+        </fieldset>
+      )}
     </fieldset>
   );
 }

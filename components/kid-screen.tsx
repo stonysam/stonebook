@@ -3,7 +3,7 @@
 import { useCallback, useState, useTransition } from 'react';
 import { exitKidMode, kidDone } from '@/app/actions';
 import { ChoreIcon } from './chore-icons';
-import { Fireworks } from './fireworks';
+import { Hearts } from './hearts';
 
 export interface KidTile { ruleId: string; objectId: string; name: string; picture: string | null; state: 'todo' | 'waiting' | 'done' }
 
@@ -100,7 +100,7 @@ export function KidScreen({ childId, name, tiles, stars }: { childId: string; na
           error={error} busy={busy} onDone={submit} onClose={() => setAsking(null)}
         />
       )}
-      {cheer && <Fireworks message={cheer} onDone={endCheer} />}
+      {cheer && <Hearts message={cheer} onDone={endCheer} />}
     </main>
   );
 }

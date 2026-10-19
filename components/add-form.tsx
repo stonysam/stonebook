@@ -13,10 +13,15 @@ export function AddForm({ typeId, typeName, defs, members, owners, meId, isParen
   isParent: boolean; initialOwner: string; today: string;
 }) {
   const [state, action, pending] = useActionState(createItem, null);
-  const [owner, setOwner] = useState(initialOwner);
+  const chore = isChore(typeName);
+  const activity = isActivity(typeName);
+  // Chores and activities ask who once, further down (Who does it? / Who's going?); other things ask here.
+  const [picked, setPicked] = useState<string[]>([initialOwner]);
+  const owner = picked[0] ?? initialOwner;
   const ui = typeUi(typeName);
   const ownerName = (m: MemberRow) => (m.id === meId ? 'Me' : m.display_name);
-  const givingAway = !isParent && owner !== meId; // a chore or task for someone else: always shared
+  // A chore for someone else, or a group job, is always shared, so everyone on it can see it.
+  const givingAway = (!isParent && owner !== meId) || picked.length > 1;
   const initialVis: Visibility = typeName === 'Document' || typeName === 'Person' ? 'personal' : 'shared';
 
   return (
@@ -26,28 +31,28 @@ export function AddForm({ typeId, typeName, defs, members, owners, meId, isParen
         <input name="name" required maxLength={120} placeholder={ui.placeholder} autoFocus />
       </label>
 
-      {owners.length > 1 && (
+      {owners.length > 1 && !chore && !activity && (
         <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="small" style={{ marginBottom: 8 }}>{ui.ownerQuestion}</legend>
           <input type="hidden" name="owner_id" value={owner} />
           <div className="wrap">
             {owners.map((m) => (
-              <button key={m.id} type="button" className="chip" aria-pressed={owner === m.id} onClick={() => setOwner(m.id)}>{ownerName(m)}</button>
+              <button key={m.id} type="button" className="chip" aria-pressed={picked.includes(m.id)} onClick={() => setPicked([m.id])}>{ownerName(m)}</button>
             ))}
           </div>
         </fieldset>
       )}
-      {owners.length === 1 && <input type="hidden" name="owner_id" value={owners[0].id} />}
+      {owners.length === 1 && !chore && !activity && <input type="hidden" name="owner_id" value={owners[0].id} />}
 
       {givingAway
-        ? <><input type="hidden" name="visibility" value="shared" /><span className="small">Shared with the family, so you can both see it.</span></>
+        ? <><input type="hidden" name="visibility" value="shared" /><span className="small">Shared with the family, so everyone on it can see it.</span></>
         : <VisibilityPicker key={owner} initial={initialVis} canPrivate={owner === meId} />}
 
       {defs.map((d) => <FieldInput key={d.id} def={d} value={null} members={members} />)}
 
-      {isActivity(typeName)
-        ? <ActivityFields members={members} meId={meId} />
-        : <ScheduleFields typeName={typeName} members={members} owner={owner} meId={meId} today={today} inAddForm />}
+      {activity
+        ? <ActivityFields members={members} meId={meId} owner={owner} today={today} onPeople={setPicked} canChoose={owners.map((m) => m.id)} />
+        : <ScheduleFields typeName={typeName} members={chore ? owners : members} owner={owner} meId={meId} today={today} inAddForm onPeople={setPicked} />}
 
       {state && !state.ok && <p role="alert" style={{ margin: 0, fontWeight: 600 }}>{state.error}</p>}
       <button className="btn btn-primary btn-big" disabled={pending}>{pending ? 'Saving…' : 'Save'}</button>

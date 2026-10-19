@@ -1,0 +1,17 @@
+/* Floating hearts when something's done */
+.hearts { position: fixed; inset: 0; z-index: 40; pointer-events: none; overflow: hidden; }
+.heart { position: absolute; bottom: -40px; opacity: 0; animation-name: heart-up; animation-timing-function: cubic-bezier(.2,.7,.4,1); animation-fill-mode: forwards; }
+@keyframes heart-up {
+  0% { transform: translate(0, 0) scale(.6); opacity: 0; }
+  12% { opacity: 1; }
+  70% { opacity: .95; }
+  100% { transform: translate(var(--drift), -78vh) scale(1.1); opacity: 0; }
+}
+.hearts-msg { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); padding: 12px 22px; border-radius: 999px;
+  background: var(--surface); color: var(--text); font-family: var(--font-display); font-weight: 600; font-size: 24px;
+  box-shadow: var(--shadow); white-space: nowrap; animation: hearts-msg 2.4s ease forwards; }
+@keyframes hearts-msg { 0% { opacity: 0; transform: translate(-50%, 12px); } 15%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .heart { display: none; }
+  .hearts-msg { animation-duration: 2.4s; }
+}

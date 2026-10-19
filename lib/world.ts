@@ -7,6 +7,7 @@ import * as plan from '@/src/engine/plan';
 import { addDays, daysBetween, isoWeekday, todayIn } from '@/src/engine/dates';
 import { getMe } from '@/lib/auth';
 import { dayLabel } from '@/lib/format';
+import { colorOf } from '@/lib/people';
 import type { ActivityChangeRow, ActivitySlotRow, AwaitingRow, EventRow, FieldDefRow, MemberRow, ObjectRow, ObjectTypeRow, RuleRow } from '@/lib/database.types';
 
 export interface World {
@@ -150,6 +151,7 @@ export interface Session {
   cancelled: boolean;
   changed: boolean;
   note: string | null;
+  people: string[];
 }
 
 /** Activities and work happening on a date, with that date's changes applied, earliest first. */
@@ -157,6 +159,7 @@ export function sessionsOn(w: World, date: string, objectId?: string): Session[]
   return plan.sessionsOn(planData(w), date, objectId).map((s) => ({
     slot: w.slots.find((x) => x.id === s.slotId)!, object: w.objects.find((o) => o.id === s.objectId)!, date: s.date,
     startsAt: s.startsAt, endsAt: s.endsAt, dropOffBy: s.dropOffBy, pickUpBy: s.pickUpBy, cancelled: s.cancelled, changed: s.changed, note: s.note,
+    people: s.people,
   }));
 }
 
@@ -174,7 +177,8 @@ export const canEditActivity = (w: World, o: ObjectRow) =>
 /** What the session cards need, worked out on the server. */
 export function sessionView(w: World, s: Session) {
   return {
-    slotId: s.slot.id, objectId: s.object.id, title: s.object.name, who: memberName(w, s.object.owner_id),
+    slotId: s.slot.id, objectId: s.object.id, title: s.object.name, who: plan.namesOf(planData(w), s.people) || memberName(w, s.object.owner_id),
+    people: s.people, color: colorOf(w.members, s.people[0]),
     date: s.date, dateLabel: dayLabel(s.date, w.today), time: s.endsAt ? `${s.startsAt}–${s.endsAt}` : s.startsAt,
     dropOffBy: s.dropOffBy, pickUpBy: s.pickUpBy, cancelled: s.cancelled, changed: s.changed, note: s.note,
   };
@@ -220,6 +224,45 @@ export function kidToday(w: World, childId: string): { chores: KidChore[]; stars
   const order = { todo: 0, waiting: 1, done: 2 };
   chores.sort((a, b) => order[a.state] - order[b.state] || a.object.name.localeCompare(b.object.name));
   const monday = addDays(w.today, 1 - isoWeekday(w.today));
-  const starsThisWeek = w.events.filter((e) => e.created_by === childId && e.occurred_on >= monday).length;
+  const starsThisWeek = w.events.filter((e) => e.created_by === childId && e.occurred_on >= monday && !isSkipped(e)).length;
   return { chores, starsThisWeek };
+}
+
+/** An "abort mission" entry: closes someone's part of a group task without counting as doing it. */
+export const isSkipped = (e: EventRow) => !!(e.data && typeof e.data === 'object' && (e.data as Record<string, unknown>).skipped === true);
+
+/** Everyone with a reminder on this item, in family order (a group task has several). */
+export const peopleOn = (w: World, objectId: string) =>
+  w.members.filter((m) => w.rules.some((r) => r.object_id === objectId && r.owner_id === m.id && r.kind !== 'record')).map((m) => m.id);
+
+const scheduleKey = (r: RuleRow) =>
+  [r.kind, (r.event_kind ?? '').trim().toLowerCase(), r.every_months, r.every_days, r.meter_every, r.due_on, r.renew_every_months, (r.weekdays ?? []).join('.')].join('|');
+
+/** Group jobs: the other people's reminders for the same job on the same schedule (not turns on different days). */
+export const groupMates = (w: World, rule: RuleRow) =>
+  w.rules.filter((r) => r.id !== rule.id && r.object_id === rule.object_id && r.kind !== 'record' && scheduleKey(r) === scheduleKey(rule));
+
+export interface DueCard { key: string; rows: DueRow[]; object: ObjectRow; typeName: string; dueOn: string | null; bucket: DueRow['bucket']; people: string[]; donePeople: string[] }
+
+/** Today's rows, with a group job's parts folded into one card. */
+export function dueCards(w: World, rows: DueRow[]): DueCard[] {
+  const cards = new Map<string, DueCard>();
+  for (const d of rows) {
+    const mates = groupMates(w, d.rule);
+    const key = mates.length ? `${d.object.id}|${scheduleKey(d.rule)}|${d.due.dueOn}` : d.rule.id;
+    const card = cards.get(key) ?? {
+      key, rows: [], object: d.object, typeName: d.typeName, dueOn: d.due.dueOn, bucket: d.bucket, people: [], donePeople: [],
+    };
+    card.rows.push(d);
+    if (mates.length && card.people.length === 0) {
+      const all = [d.rule, ...mates];
+      card.people = w.members.filter((m) => all.some((r) => r.owner_id === m.id)).map((m) => m.id);
+      card.donePeople = all.filter((r) => {
+        const due = dueFor(w, r)?.due;
+        return !due || due.status === 'done' || (!!due.dueOn && !!d.due.dueOn && due.dueOn > d.due.dueOn);
+      }).map((r) => r.owner_id);
+    }
+    cards.set(key, card);
+  }
+  return [...cards.values()];
 }

@@ -50,3 +50,17 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   }
 }
+
+/* Person colours (see lib/people.ts). --pc fills an avatar under white text; --pl draws stripes. */
+.pc-moss  { --pc: #4f7a34; --pl: #4f7a34; }
+.pc-sky   { --pc: #2f6f96; --pl: #2f6f96; }
+.pc-clay  { --pc: #a9532f; --pl: #a9532f; }
+.pc-plum  { --pc: #7f4775; --pl: #7f4775; }
+.pc-hay   { --pc: #946b1e; --pl: #946b1e; }
+.pc-slate { --pc: #4d5e6e; --pl: #4d5e6e; }
+.pc-rose  { --pc: #b04660; --pl: #b04660; }
+.pc-teal  { --pc: #21756c; --pl: #21756c; }
+@media (prefers-color-scheme: dark) {
+  .pc-moss { --pl: #78a85a; } .pc-sky { --pl: #5f9cc4; } .pc-clay { --pl: #d07b56; } .pc-plum { --pl: #b07aa6; }
+  .pc-hay { --pl: #c99a3b; } .pc-slate { --pl: #8597a9; } .pc-rose { --pl: #d8768f; } .pc-teal { --pl: #4fa69b; }
+}

@@ -133,3 +133,16 @@ describe('the reminder function', () => {
     }
   });
 });
+
+describe('one-off appointments for several people', () => {
+  it('the family dentist shows only on its date, for everyone going, with lifts', () => {
+    const d = data();
+    d.objects.push(obj('dentist', 'Dentist', 'crystal', 'crystal'));
+    d.slots.push({ id: 'dn', object_id: 'dentist', weekdays: [5], starts_at: '15:00:00', ends_at: '16:30:00', drop_off_by: 'crystal',
+      pick_up_by: null, active: true, on_date: '2026-10-23', people: ['sam', 'crystal', 'lucy', 'benji'] });
+    expect(morningSummary(d, 'lucy', '2026-10-23')!.body).toBe('15:00 Dentist (with the whole family)');
+    expect(morningSummary(d, 'lucy', '2026-10-30')).toBeNull(); // next Friday: it was a one-off
+    expect(liftNotices(d, 'crystal', '2026-10-23', 14 * 60 + 20)[0].title).toBe('Drop Sam, Lucy and Benji at Dentist by 15:00');
+    expect(calendarFor(d, 'benji', '2026-10-20').filter((e) => e.uid.startsWith('slot-dn'))).toHaveLength(1);
+  });
+});

@@ -1,11 +1,12 @@
 import Link from '@/components/link';
-import { LogButton } from '@/components/log-button';
+import { Avatar, Avatars } from '@/components/avatar';
+import { AbortButton, DoneButton, LogButton } from '@/components/log-button';
 import { ReminderNudge } from '@/components/reminder-nudge';
 import { SessionCard } from '@/components/session-card';
 import { possessive, todayHeading, whenText } from '@/lib/format';
-import { isChore } from '@/lib/types';
+import { colorOf } from '@/lib/people';
 import {
-  allDue, canEditActivity, driverOptions, loadWorld, memberName, meterUnitFor, recentThings, sessionView, sessionsOn,
+  allDue, canEditActivity, driverOptions, dueCards, loadWorld, memberName, meterUnitFor, recentThings, sessionView, sessionsOn,
   suggestedKinds, turnsOf, typeOf, type DueRow,
 } from '@/lib/world';
 import { addDays } from '@/src/engine/dates';
@@ -35,7 +36,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   const myPendingApprovals = me.role === 'parent' ? w.pending.length : 0;
   const recent = recentThings(w);
   const plans = [w.today, addDays(w.today, 1)].flatMap((d) => sessionsOn(w, d))
-    .filter((s) => view === 'family' || s.object.owner_id === me.id || s.dropOffBy === me.id || s.pickUpBy === me.id);
+    .filter((s) => view === 'family' || s.people.includes(me.id) || s.dropOffBy === me.id || s.pickUpBy === me.id);
   const { drivers, names } = driverOptions(w);
 
   return (
@@ -82,38 +83,48 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
       )}
 
       {SECTIONS.map(([bucket, title]) => {
-        const list = rows.filter((r) => r.bucket === bucket);
+        const list = dueCards(w, rows.filter((r) => r.bucket === bucket));
         if (list.length === 0) return null;
         return (
           <section key={bucket} className="stack" aria-label={title}>
             <h2 className="eyebrow">{title}</h2>
-            {list.map((d) => {
-              const waiting = waitingObjects.has(d.object.id);
-              const forWhom = d.rule.owner_id === me.id ? 'yours' : possessive(memberName(w, d.rule.owner_id));
+            {list.map((c) => {
+              const waiting = waitingObjects.has(c.object.id);
+              const mine = c.rows.find((d) => d.rule.owner_id === me.id);
+              const lead = mine ?? c.rows[0];
+              const group = c.people.length > 1;
+              const forWhom = group ? 'Group job' : lead.rule.owner_id === me.id ? 'yours' : possessive(memberName(w, lead.rule.owner_id));
               return (
-                <div key={d.rule.id} className="card row" style={{ padding: '12px 12px 12px 16px' }}>
-                  <Link href={`/things/${d.object.id}`} className="card-link" style={{ flex: '1 1 auto', minWidth: 0 }}>
-                    <span className="item-title">{d.object.name}</span>
+                <div key={c.key} className={`card row stripe pc-${colorOf(w.members, lead.rule.owner_id)}`} style={{ padding: '12px 12px 12px 14px' }}>
+                  <Link href={`/things/${c.object.id}`} className="card-link" style={{ flex: '1 1 auto', minWidth: 0 }}>
+                    <span className="item-title">{c.object.name}</span>
                     <span>
-                      <span className="muted">{d.rule.name} · </span>
-                      <span className={d.bucket === 'overdue' ? 'overdue' : 'muted'}>
-                        {d.bucket === 'setup' ? 'not started' : whenText(d.due.dueOn, w.today)}
+                      <span className="muted">{lead.rule.name} · </span>
+                      <span className={c.bucket === 'overdue' ? 'overdue' : 'muted'}>
+                        {c.bucket === 'setup' ? 'not started' : whenText(c.dueOn, w.today)}
                       </span>
                     </span>
-                    <span className="small">{d.typeName} · {forWhom}</span>
+                    {group
+                      ? <span className="row" style={{ gap: 8 }}><Avatars members={w.members} ids={c.people} done={c.donePeople} /><span className="small">{c.donePeople.length} of {c.people.length} done</span></span>
+                      : <span className="small row" style={{ gap: 6 }}>{view === 'family' && <Avatar members={w.members} id={lead.rule.owner_id} size={18} />}{c.typeName} · {forWhom}</span>}
                   </Link>
-                  {waiting ? (
-                    <span className="badge badge-wait" style={{ maxWidth: 120, textAlign: 'center' }}>Waiting for Mum or Dad</span>
-                  ) : me.role !== 'child' ? (
-                    <LogButton
-                      target={{ objectId: d.object.id, objectName: d.object.name, kinds: suggestedKinds(w, d.object.id), meterUnit: meterUnitFor(w, d.object.id),
-                        ruleId: d.rule.id, turns: turnsOf(w, d.object.id), meId: me.id }}
-                      today={w.today}
-                      kidName={kid ? me.display_name : null}
-                      label={isChore(d.typeName) ? 'Done' : 'Log'}
-                      style={{ flexShrink: 0, minWidth: 72 }}
-                    />
-                  ) : null}
+                  <div className="stack" style={{ gap: 2, alignItems: 'flex-end', flexShrink: 0 }}>
+                    {waiting ? (
+                      <span className="badge badge-wait" style={{ maxWidth: 120, textAlign: 'center' }}>Waiting for Mum or Dad</span>
+                    ) : me.role === 'child' ? null : mine && mine.rule.completion === 'done' ? (
+                      <DoneButton objectId={c.object.id} ruleId={mine.rule.id} kidName={kid ? me.display_name : null} style={{ minWidth: 72 }} />
+                    ) : (
+                      <LogButton
+                        target={{ objectId: c.object.id, objectName: c.object.name, kinds: suggestedKinds(w, c.object.id), meterUnit: meterUnitFor(w, c.object.id),
+                          ruleId: (mine ?? lead).rule.id, turns: turnsOf(w, c.object.id), meId: me.id }}
+                        today={w.today}
+                        kidName={kid ? me.display_name : null}
+                        label="Log"
+                        style={{ minWidth: 72 }}
+                      />
+                    )}
+                    {group && mine && !waiting && me.role !== 'child' && <AbortButton objectId={c.object.id} ruleId={mine.rule.id} />}
+                  </div>
                 </div>
               );
             })}

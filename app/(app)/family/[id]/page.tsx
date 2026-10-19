@@ -1,6 +1,9 @@
 import Link from '@/components/link';
 import { notFound } from 'next/navigation';
+import { Avatar } from '@/components/avatar';
+import { ColorPicker } from '@/components/color-picker';
 import { SessionCard } from '@/components/session-card';
+import { colorOf } from '@/lib/people';
 import { dateText, possessive, whenText } from '@/lib/format';
 import { ACTIVITY, CHORE, isActivity } from '@/lib/types';
 import { canEditActivity, choresOf, driverOptions, dueFor, eventsForRule, loadWorld, sessionView, typeOf, upcomingSessions } from '@/lib/world';
@@ -15,11 +18,13 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
 
   const owned = w.objects.filter((o) => o.owner_id === person.id && !o.archived_at);
   const chores = choresOf(w, person.id);
-  const activities = owned.filter((o) => isActivity(typeOf(w, o)?.name));
+  const activities = w.objects.filter((o) => !o.archived_at && isActivity(typeOf(w, o)?.name)
+    && (o.owner_id === person.id || w.slots.some((x) => x.object_id === o.id && x.people.includes(person.id))));
   const others = owned.filter((o) => !typeOf(w, o)?.assignable && !isActivity(typeOf(w, o)?.name));
   const sessions = activities.flatMap((o) => upcomingSessions(w, o.id, 7)).sort((a, b) => (a.date + a.startsAt).localeCompare(b.date + b.startsAt));
-  const lifts = w.objects.filter((o) => !o.archived_at && o.owner_id !== person.id)
-    .flatMap((o) => upcomingSessions(w, o.id, 7)).filter((s) => !s.cancelled && (s.dropOffBy === person.id || s.pickUpBy === person.id));
+  const sessionsMine = sessions.filter((x) => x.people.includes(person.id));
+  const lifts = w.objects.filter((o) => !o.archived_at)
+    .flatMap((o) => upcomingSessions(w, o.id, 7)).filter((s) => !s.cancelled && !s.people.includes(person.id) && (s.dropOffBy === person.id || s.pickUpBy === person.id));
   const { drivers, names } = driverOptions(w);
   const canGive = w.me.role !== 'child';
   const canAddActivity = w.me.role === 'parent' || (isMe && w.me.role !== 'child');
@@ -39,7 +44,11 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   return (
     <main className="page">
       <Link href="/family" className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>Back to Family</Link>
-      <h1>{isMe ? 'You' : person.display_name}</h1>
+      <header className="row" style={{ gap: 12 }}>
+        <Avatar members={w.members} id={person.id} size={48} />
+        <h1>{isMe ? 'You' : person.display_name}</h1>
+      </header>
+      {w.me.role === 'parent' && <ColorPicker memberId={person.id} current={colorOf(w.members, person.id)} name={isMe ? 'your' : possessive(person.display_name)} />}
 
       <section className="stack" aria-label="Chores">
         <div className="row">
@@ -76,10 +85,10 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
           {canAddActivity && <Link href={`/add?type=${typeId(ACTIVITY)}&owner=${person.id}`} className="btn">Add</Link>}
         </div>
         {activities.length === 0 && <div className="card small">None yet.</div>}
-        {sessions.map((x) => (
+        {sessionsMine.map((x) => (
           <SessionCard key={`${x.slot.id}-${x.date}`} s={sessionView(w, x)} drivers={drivers} names={names} canChange={canEditActivity(w, x.object)} />
         ))}
-        {activities.length > 0 && sessions.length === 0 && <div className="card small">Nothing in the next week.</div>}
+        {activities.length > 0 && sessionsMine.length === 0 && <div className="card small">Nothing in the next week.</div>}
         {lifts.length > 0 && (
           <div className="card stack" style={{ gap: 4 }}>
             <strong>Lifts {isMe ? 'you give' : `${person.display_name} gives`} this week</strong>

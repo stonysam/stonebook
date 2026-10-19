@@ -8,7 +8,7 @@ import { cookies } from 'next/headers';
 import { KID_COOKIE } from '@/lib/kid';
 import { redirect } from 'next/navigation';
 import { getMe } from '@/lib/auth';
-import { addDays, parseDate, todayIn } from '@/src/engine/dates';
+import { addDays, isoWeekday, parseDate, todayIn } from '@/src/engine/dates';
 import type { Json, RuleKindDb, Visibility } from '@/lib/database.types';
 import { isActivity, isChore } from '@/lib/types';
 
@@ -131,20 +131,25 @@ function rulesFromForm(form: FormData, objectId: string, defaultOwner: string, c
   const how = clean(form.get('how'), 20);
   const what = clean(form.get('what'), 80) || (chore ? 'Done' : '');
   const owner = clean(form.get('responsible'), 40) || defaultOwner;
+  // A group task: one reminder per person, each ticks their own part.
+  const people = [...new Set(form.getAll('people').map((v) => clean(v, 40)).filter(Boolean))];
+  const completion = clean(form.get('completion'), 4) === 'done' ? 'done' : clean(form.get('completion'), 4) === 'log' ? 'log' : chore ? 'done' : 'log';
+  const forEach = (row: RuleInsert) => ({ rows: (people.length > 1 ? people : [row.owner_id as string]).map((who) => ({ ...row, owner_id: who })) });
   const num = (name: string) => { const n = Number(clean(form.get(name), 12)); return Number.isFinite(n) && n > 0 ? Math.round(n) : null; };
-  const base = { object_id: objectId, owner_id: owner, name: what || 'Reminder', event_kind: what || null };
-  const one = (row: RuleInsert) => ({ rows: [row] });
+  const base = { object_id: objectId, owner_id: people[0] ?? owner, name: what || 'Reminder', event_kind: what || null, completion };
+  const one = forEach;
   switch (how) {
     case '':
     case 'none':
       return { rows: [] };
     case 'record':
-      return one({ ...base, kind: 'record' as RuleKindDb, event_kind: null, name: 'History only' });
+      return { rows: [{ ...base, kind: 'record' as RuleKindDb, event_kind: null, name: 'History only' }] };
     case 'daily':
       return one({ ...base, kind: 'interval', every_days: 1, lead_days: [1], starts_on: todayIn() });
     case 'weekly': {
       const days = [...new Set(form.getAll('days').map(Number).filter((d) => d >= 1 && d <= 7))].sort();
       if (days.length === 0) return { rows: [], error: 'Pick at least one day.' };
+      if (people.length > 1) return forEach({ ...base, kind: 'weekly', weekdays: days });
       const byOwner = new Map<string, number[]>();
       for (const d of days) {
         const who = clean(form.get(`day_owner_${d}`), 40) || owner;
@@ -185,7 +190,11 @@ function rulesFromForm(form: FormData, objectId: string, defaultOwner: string, c
 
 /** Weekly times for an activity or work, from the form (days, starts_at, ends_at, drop_off_by, pick_up_by). */
 function slotFromForm(form: FormData, objectId: string): { row?: Record<string, unknown>; error?: string } {
-  const days = [...new Set(form.getAll('slot_days').map(Number).filter((d) => d >= 1 && d <= 7))].sort();
+  const once = clean(form.get('slot_when'), 10) === 'once';
+  const onDate = clean(form.get('slot_date'), 10);
+  if (once && !isIsoDate(onDate)) return { error: 'Pick the date.' };
+  const days = once ? [isoWeekday(onDate)] : [...new Set(form.getAll('slot_days').map(Number).filter((d) => d >= 1 && d <= 7))].sort();
+  const people = [...new Set(form.getAll('slot_people').map((v) => clean(v, 40)).filter(Boolean))];
   const starts = clean(form.get('starts_at'), 5);
   const ends = clean(form.get('ends_at'), 5);
   const time = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -193,7 +202,7 @@ function slotFromForm(form: FormData, objectId: string): { row?: Record<string, 
   if (days.length === 0) return { error: 'Pick the day or days.' };
   if (!time.test(starts)) return { error: 'Say what time it starts.' };
   if (ends && (!time.test(ends) || ends <= starts)) return { error: 'The end time should be after the start.' };
-  return { row: { object_id: objectId, weekdays: days, starts_at: starts, ends_at: ends || null,
+  return { row: { object_id: objectId, weekdays: days, on_date: once ? onDate : null, people, starts_at: starts, ends_at: ends || null,
     drop_off_by: clean(form.get('drop_off_by'), 40) || null, pick_up_by: clean(form.get('pick_up_by'), 40) || null } };
 }
 
@@ -212,6 +221,7 @@ export async function createItem(_prev: ActionResult | null, form: FormData): Pr
     if (visibility !== 'shared') return fail('A chore or task you give someone else is shared with the family.');
   }
   if (visibility === 'private' && ownerId !== me.id) return fail('Only the owner can make something private.');
+  if (new Set(form.getAll('people')).size > 1 && visibility !== 'shared') return fail('A group job is shared with the family, so everyone on it can see it.');
 
   const objectId = crypto.randomUUID();
   const ruleCheck = isActivity(type.name) ? { rows: [] } : rulesFromForm(form, objectId, ownerId, isChore(type.name));
@@ -415,4 +425,67 @@ export async function kidDone(input: { childId: string; objectId: string; ruleId
   if (r.result !== 'ok') return fail('Oops, that’s not your PIN. Try again.');
   revalidatePath('/kid');
   return { ok: true, waiting: !!r.waiting };
+}
+
+// ---------------------------------------------------------------------------
+// Done in one tap (with undo), abort mission, and the Done-or-Log switch
+// ---------------------------------------------------------------------------
+export async function quickDone(objectId: string, ruleId: string | null): Promise<ActionResult & { eventId?: string }> {
+  const { supabase, me } = await getMe();
+  const { data: rule } = ruleId ? await supabase.from('rules').select('event_kind').eq('id', ruleId).single() : { data: null };
+  const id = crypto.randomUUID();
+  const { data, error } = await supabase.from('events').insert({
+    id, root_id: id, object_id: objectId, kind: rule?.event_kind || 'Done', occurred_on: todayIn(), created_by: me.id, rule_id: ruleId,
+  }).select('needs_confirmation').single();
+  if (error) return fail('Couldn’t save that. Try again.');
+  done();
+  return { ok: true, waiting: data?.needs_confirmation ?? false, eventId: id };
+}
+
+export async function undoDone(eventId: string, objectId: string): Promise<ActionResult> {
+  const { supabase, me } = await getMe();
+  const { data: original } = await supabase.from('events').select('kind, occurred_on').eq('id', eventId).single();
+  if (!original) return fail('Couldn’t undo that.');
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from('events').insert({
+    id, root_id: id, object_id: objectId, kind: original.kind, occurred_on: original.occurred_on, correction_of: eventId, voided: true,
+    note: 'Undone', created_by: me.id,
+  });
+  if (error) return fail('Couldn’t undo that.');
+  done();
+  return { ok: true, message: 'Undone.' };
+}
+
+/** Someone tagged on a group task who didn't take part closes their part, without the hearts. */
+export async function abortMission(objectId: string, ruleId: string): Promise<ActionResult> {
+  const { supabase, me } = await getMe();
+  const { data: rule } = await supabase.from('rules').select('event_kind, owner_id').eq('id', ruleId).single();
+  if (!rule) return fail('Not found.');
+  if (rule.owner_id !== me.id && me.role !== 'parent') return fail('Only for your own part.');
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from('events').insert({
+    id, root_id: id, object_id: objectId, kind: rule.event_kind || 'Done', occurred_on: todayIn(), created_by: me.id, rule_id: ruleId,
+    data: { skipped: true }, note: 'Abort mission',
+  });
+  if (error) return fail('Couldn’t save that.');
+  done();
+  return { ok: true, message: 'Mission aborted. No hearts this time.' };
+}
+
+export async function setRuleCompletion(ruleId: string, completion: 'done' | 'log'): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  const { error, count } = await supabase.from('rules').update({ completion }, { count: 'exact' }).eq('id', ruleId);
+  if (error || count === 0) return fail('You can’t change this one.');
+  done();
+  return { ok: true, message: completion === 'done' ? 'Now one tap: Done.' : 'Now opens Log for details.' };
+}
+
+export async function setMemberColor(memberId: string, color: string): Promise<ActionResult> {
+  const { supabase, me } = await getMe();
+  if (me.role !== 'parent') return fail('Only Mum or Dad can choose colours.');
+  if (!['moss', 'sky', 'clay', 'plum', 'hay', 'slate', 'rose', 'teal'].includes(color)) return fail('Pick one of the colours.');
+  const { error } = await supabase.from('members').update({ color: color as never }).eq('id', memberId);
+  if (error) return fail('Couldn’t save the colour.');
+  done();
+  return { ok: true };
 }

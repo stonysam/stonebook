@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useState, useTransition } from 'react';
-import { logEvent } from '@/app/actions';
+import { useCallback, useEffect, useState, useTransition } from 'react';
+import { abortMission, logEvent, quickDone, undoDone } from '@/app/actions';
 import { addDays } from '@/src/engine/dates';
-import { Fireworks } from './fireworks';
+import { Hearts } from './hearts';
 import { useToast } from './toast';
 
 export interface LogTarget {
@@ -40,7 +40,7 @@ export function LogButton({ target, today, kidName, label = 'Log', className = '
           }}
         />
       )}
-      {cheer && <Fireworks message={cheer} onDone={endCheer} />}
+      {cheer !== null && <Hearts message={cheer || null} onDone={endCheer} />}
       {toast.node}
     </>
   );
@@ -146,5 +146,66 @@ function LogSheet({ target, today, onClose, onLogged }: {
         <button className="btn btn-primary btn-big" disabled={busy || !kindName}>{busy ? 'Saving…' : 'Log it'}</button>
       </form>
     </div>
+  );
+}
+
+/** One tap: done today, hearts float up, and "Undo" for 5 seconds. */
+export function DoneButton({ objectId, ruleId, kidName, label = 'Done', className = 'btn btn-primary', style }: {
+  objectId: string; ruleId: string | null; kidName?: string | null; label?: string; className?: string; style?: React.CSSProperties;
+}) {
+  const [busy, start] = useTransition();
+  const [hearts, setHearts] = useState<string | null>(null);
+  const [undo, setUndo] = useState<{ eventId: string; waiting: boolean } | null>(null);
+  const toast = useToast();
+  const endHearts = useCallback(() => setHearts(null), []);
+
+  useEffect(() => {
+    if (!undo) return;
+    const t = setTimeout(() => setUndo(null), 5000);
+    return () => clearTimeout(t);
+  }, [undo]);
+
+  return (
+    <>
+      <button type="button" className={className} style={style} disabled={busy}
+        onClick={() => start(async () => {
+          const r = await quickDone(objectId, ruleId);
+          if (!r.ok) { toast.show(r.error); return; }
+          setHearts(kidName ? `Nice one, ${kidName}!` : '');
+          setUndo({ eventId: r.eventId!, waiting: !!r.waiting });
+        })}>
+        {busy ? '…' : label}
+      </button>
+      {hearts !== null && <Hearts message={hearts || null} onDone={endHearts} />}
+      {undo && (
+        <div className="toast row" role="status">
+          <span style={{ flex: '1 1 auto' }}>{undo.waiting ? 'Done. Mum or Dad will check it.' : 'Done.'}</span>
+          <button type="button" className="btn btn-text" style={{ color: 'var(--bg)', minHeight: 32 }}
+            onClick={() => start(async () => { const eventId = undo.eventId; setUndo(null); const r = await undoDone(eventId, objectId); toast.show(r.ok ? 'Undone.' : r.error); })}>
+            Undo
+          </button>
+        </div>
+      )}
+      {toast.node}
+    </>
+  );
+}
+
+/** For someone tagged on a group task who didn't take part. */
+export function AbortButton({ objectId, ruleId }: { objectId: string; ruleId: string }) {
+  const [busy, start] = useTransition();
+  const [asked, setAsked] = useState(false);
+  const toast = useToast();
+  return (
+    <>
+      <button type="button" className="btn btn-text abort" disabled={busy}
+        onClick={() => {
+          if (!asked) { setAsked(true); setTimeout(() => setAsked(false), 4000); return; }
+          start(async () => { const r = await abortMission(objectId, ruleId); toast.show(r.ok ? (r.message ?? '') : r.error); });
+        }}>
+        {asked ? 'Sure? Tap again' : 'Abort mission'}
+      </button>
+      {toast.node}
+    </>
   );
 }

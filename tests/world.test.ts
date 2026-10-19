@@ -9,7 +9,7 @@ import type { EventRow, MemberRow, ObjectRow, RuleRow } from '../lib/database.ty
 import type { World } from '../lib/world';
 
 const member = (id: string, role: MemberRow['role']): MemberRow =>
-  ({ id, display_name: id, role, email: null, auth_user_id: null, created_at: '2026-10-01T00:00:00Z' });
+  ({ id, display_name: id, role, email: null, auth_user_id: null, created_at: '2026-10-01T00:00:00Z', color: null });
 const object = (id: string, owner: string, extra: Partial<ObjectRow> = {}): ObjectRow => ({
   id, object_type_id: 't-' + (extra.name ?? 'thing'), name: id, owner_id: owner, visibility: 'shared', share_with_family: false,
   field_values: {}, archived_at: null, created_by: owner, created_at: '2026-10-01T00:00:00Z', ...extra,
@@ -18,7 +18,7 @@ const rule = (id: string, objectId: string, extra: Partial<RuleRow>): RuleRow =>
   id, object_id: objectId, name: 'Rule', kind: 'interval', event_kind: 'Done', every_months: null, every_days: null,
   meter_every: null, meter_unit: null, due_on: null, renew_every_months: null, starts_on: null, meter_start: null,
   weekdays: null, owner_id: 'sam', lead_days: [14, 1], overdue_repeat_days: 7, active: true, created_by: 'sam',
-  created_at: '2026-10-18T08:00:00Z', ...extra,
+  created_at: '2026-10-18T08:00:00Z', completion: 'log', ...extra,
 });
 const event = (id: string, objectId: string, kind: string, on: string): EventRow => ({
   id, object_id: objectId, kind, occurred_on: on, meter_value: null, meter_unit: null, data: {}, note: null,
@@ -130,7 +130,7 @@ describe('recent things', () => {
 describe('activities', () => {
   it('a date change overrides the usual drivers', () => {
     const w = world([], []);
-    w.slots = [{ id: 's', object_id: 'hens', weekdays: [4], starts_at: '17:00:00', ends_at: '19:00:00', drop_off_by: 'crystal', pick_up_by: 'sam', active: true, created_by: 'lucy', created_at: '' }];
+    w.slots = [{ id: 's', object_id: 'hens', weekdays: [4], starts_at: '17:00:00', ends_at: '19:00:00', drop_off_by: 'crystal', pick_up_by: 'sam', active: true, created_by: 'lucy', created_at: '', on_date: null, people: [] }];
     w.changes = [{ slot_id: 's', on_date: '2026-10-29', cancelled: false, drop_off_by: 'sam', pick_up_by: 'sam', note: null, changed_by: 'sam', changed_at: '' }];
     expect(sessionsOn(w, '2026-10-22')[0]).toMatchObject({ startsAt: '17:00', endsAt: '19:00', dropOffBy: 'crystal', changed: false });
     expect(sessionsOn(w, '2026-10-29')[0]).toMatchObject({ dropOffBy: 'sam', changed: true });

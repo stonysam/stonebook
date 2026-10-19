@@ -18,6 +18,9 @@ export interface SessionView {
   cancelled: boolean;
   changed: boolean;
   note: string | null;
+  people: string[];
+  /** Colour key of the first person going, for the stripe. */
+  color?: string;
 }
 
 /** One time an activity happens, with who drives; people who may change it get "Change". */
@@ -32,7 +35,7 @@ export function SessionCard({ s, drivers, names, canChange, showTitle = true }: 
   ].filter(Boolean).join(' · ');
 
   return (
-    <div className={`card row${s.cancelled ? ' dashed' : ''}`} style={{ padding: '12px 8px 12px 16px', alignItems: 'flex-start' }}>
+    <div className={`card row stripe pc-${s.color ?? 'moss'}${s.cancelled ? ' dashed' : ''}`} style={{ padding: '12px 8px 12px 14px', alignItems: 'flex-start' }}>
       <div style={{ flex: '1 1 auto', minWidth: 0 }} className="stack">
         <span className="small">{s.dateLabel} · {s.time}</span>
         {showTitle && (

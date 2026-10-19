@@ -1,4 +1,5 @@
 import Link from '@/components/link';
+import { Avatar } from '@/components/avatar';
 import { choresOf, loadWorld } from '@/lib/world';
 
 export const metadata = { title: 'Family · Stonebook' };
@@ -15,9 +16,7 @@ export default async function Family() {
           const chores = choresOf(w, m.id).length;
           return (
             <Link key={m.id} href={`/family/${m.id}`} className="list-item">
-              <span style={{ width: 40, height: 40, borderRadius: 20, background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }} aria-hidden="true">
-                {m.display_name[0]}
-              </span>
+              <Avatar members={w.members} id={m.id} size={40} />
               <span style={{ flex: '1 1 auto' }}>
                 <span className="item-title" style={{ display: 'block' }}>{m.id === w.me.id ? `${m.display_name} (you)` : m.display_name}</span>
                 <span className="small">{ROLE[m.role]}{chores ? ` · ${chores === 1 ? '1 chore or task' : `${chores} chores and tasks`}` : ''}</span>

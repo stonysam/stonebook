@@ -1,13 +1,16 @@
 import Link from '@/components/link';
 import { notFound } from 'next/navigation';
 import { FixEntry, ItemActions, StopRuleButton, StopSlotButton } from '@/components/item-tools';
-import { LogButton } from '@/components/log-button';
+import { Avatar, Avatars } from '@/components/avatar';
+import { AbortButton, DoneButton, LogButton } from '@/components/log-button';
+import { CompletionSwitch } from '@/components/item-tools';
+import { colorOf } from '@/lib/people';
 import { ChoreIcon } from '@/components/chore-icons';
 import { SessionCard } from '@/components/session-card';
 import { dateText, possessive, whenText, WEEKDAYS } from '@/lib/format';
 import { isActivity, isChore } from '@/lib/types';
 import {
-  canEditObject, driverOptions, dueFor, eventsOf, loadWorld, memberName, meterUnitFor, sessionView, suggestedKinds, turnsOf, typeOf,
+  canEditObject, driverOptions, dueFor, eventsOf, groupMates, loadWorld, memberName, meterUnitFor, sessionView, suggestedKinds, turnsOf, typeOf,
   upcomingSessions,
 } from '@/lib/world';
 
@@ -32,6 +35,7 @@ export default async function ItemPage({ params, searchParams }: {
   const kid = w.me.role === 'junior' || w.me.role === 'child';
   const owner = o.owner_id === w.me.id ? 'you' : memberName(w, o.owner_id);
   const activity = isActivity(type?.name);
+  const myDone = rules.find((d) => d.rule.owner_id === w.me.id && d.rule.completion === 'done' && d.due.status !== 'done');
   const slots = w.slots.filter((x) => x.object_id === o.id);
   const sessions = activity ? upcomingSessions(w, o.id).slice(0, 8) : [];
   const { drivers, names } = driverOptions(w);
@@ -56,7 +60,18 @@ export default async function ItemPage({ params, searchParams }: {
             {added && <p className="badge badge-done" style={{ marginTop: 8 }}>Added</p>}
           </header>
 
-          {w.me.role !== 'child' && !o.archived_at && (
+          {w.me.role !== 'child' && !o.archived_at && (myDone ? (
+            <div className="stack" style={{ gap: 4 }}>
+              <DoneButton objectId={o.id} ruleId={myDone.rule.id} kidName={kid ? w.me.display_name : null} label="Mark done" className="btn btn-primary btn-big btn-block" />
+              <div className="row" style={{ justifyContent: 'space-between' }}>
+                <LogButton
+                  target={{ objectId: o.id, objectName: o.name, kinds: suggestedKinds(w, o.id), meterUnit: meterUnitFor(w, o.id), turns: turnsOf(w, o.id), ruleId: myDone.rule.id, meId: w.me.id }}
+                  today={w.today} kidName={kid ? w.me.display_name : null} label="Log with a note or date" className="btn btn-text"
+                />
+                {groupMates(w, myDone.rule).length > 0 && <AbortButton objectId={o.id} ruleId={myDone.rule.id} />}
+              </div>
+            </div>
+          ) : (
             <LogButton
               target={{ objectId: o.id, objectName: o.name, kinds: suggestedKinds(w, o.id), meterUnit: meterUnitFor(w, o.id), turns: turnsOf(w, o.id), meId: w.me.id }}
               today={w.today}
@@ -64,7 +79,7 @@ export default async function ItemPage({ params, searchParams }: {
               label={isChore(type?.name) ? 'Mark done' : 'Log something'}
               className="btn btn-primary btn-big btn-block"
             />
-          )}
+          ))}
 
           {editable && (
             <ItemActions
@@ -82,7 +97,8 @@ export default async function ItemPage({ params, searchParams }: {
               {slots.length === 0 && <div className="card small">No times yet. {editable ? 'Add them with “Add times” above.' : ''}</div>}
               {slots.map((x) => (
                 <div key={x.id} className="card stack" style={{ gap: 4 }}>
-                  <strong>Every {days(x.weekdays)}, {x.starts_at.slice(0, 5)}{x.ends_at ? `–${x.ends_at.slice(0, 5)}` : ''}</strong>
+                  <strong>{x.on_date ? dateText(x.on_date, w.today) : `Every ${days(x.weekdays)}`}, {x.starts_at.slice(0, 5)}{x.ends_at ? `–${x.ends_at.slice(0, 5)}` : ''}</strong>
+                  {x.people.length > 0 && <span className="row" style={{ gap: 8 }}><Avatars members={w.members} ids={x.people} /><span className="small">{x.people.map((id) => memberName(w, id)).join(', ')}</span></span>}
                   <span className="muted" style={{ fontSize: 14 }}>
                     {[x.drop_off_by ? `Drop-off: ${names[x.drop_off_by]}` : null, x.pick_up_by ? `Pick-up: ${names[x.pick_up_by]}` : null].filter(Boolean).join(' · ') || 'No lift needed'}
                   </span>
@@ -100,8 +116,9 @@ export default async function ItemPage({ params, searchParams }: {
             <h2 className="eyebrow">{activity ? 'Reminders' : 'What’s coming up'}</h2>
             {rules.length === 0 && <div className="card small">No reminders. {editable && !activity ? 'Add one above if it needs doing regularly.' : ''}</div>}
             {rules.map((d) => (
-              <div key={d.rule.id} className="card stack" style={{ gap: 4 }}>
-                <div className="row">
+              <div key={d.rule.id} className={`card stack stripe pc-${colorOf(w.members, d.rule.owner_id)}`} style={{ gap: 4 }}>
+                <div className="row" style={{ gap: 8 }}>
+                  <Avatar members={w.members} id={d.rule.owner_id} size={22} />
                   <strong>{d.rule.name}</strong>
                   <span className="spacer" />
                   <strong className={d.bucket === 'overdue' ? 'overdue' : ''}>
@@ -109,7 +126,10 @@ export default async function ItemPage({ params, searchParams }: {
                   </strong>
                 </div>
                 <span className="muted" style={{ fontSize: 14 }}>{d.due.basis}</span>
-                {d.rule.owner_id !== o.owner_id && <span className="small">{isChore(type?.name) ? `${possessive(memberName(w, d.rule.owner_id))} turn` : `Reminds ${memberName(w, d.rule.owner_id)}`}</span>}
+                <span className="small">
+                  {groupMates(w, d.rule).length ? `${possessive(memberName(w, d.rule.owner_id))} part of a group job` : isChore(type?.name) ? `${possessive(memberName(w, d.rule.owner_id))} turn` : `Reminds ${memberName(w, d.rule.owner_id)}`}
+                </span>
+                {editable && d.rule.kind !== 'record' && <CompletionSwitch ruleId={d.rule.id} value={d.rule.completion} />}
                 {editable && <StopRuleButton ruleId={d.rule.id} />}
               </div>
             ))}

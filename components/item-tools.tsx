@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useState, useTransition } from 'react';
-import { addRule, addSlot, correctEvent, setArchived, stopRule, stopSlot, updateDetails, type ActionResult } from '@/app/actions';
+import { addRule, addSlot, correctEvent, setArchived, setRuleCompletion, stopRule, stopSlot, updateDetails, type ActionResult } from '@/app/actions';
 import { isActivity } from '@/lib/types';
 import { ActivityFields } from './activity-fields';
 import { CHORE_PICTURES, ChoreIcon } from './chore-icons';
@@ -145,7 +145,7 @@ export function ItemActions(props: {
         <form action={ruleAction} className="card stack" style={{ gap: 14, border: '2px solid var(--text)' }}>
           <input type="hidden" name="object_id" value={props.objectId} />
           {activity
-            ? <ActivityFields members={props.members} meId={props.meId} />
+            ? <ActivityFields members={props.members} meId={props.meId} owner={props.ownerId} today={props.today} />
             : <ScheduleFields typeName={props.typeName} members={props.members} owner={props.ownerId} meId={props.meId} today={props.today} />}
           {ruleState && !ruleState.ok && <p role="alert" style={{ margin: 0, fontWeight: 600 }}>{ruleState.error}</p>}
           <button className="btn btn-primary" disabled={addingRule}>{addingRule ? 'Saving…' : activity ? 'Add times' : 'Add reminder'}</button>
@@ -238,5 +238,22 @@ export function FixEntry(props: {
       )}
       {toast.node}
     </>
+  );
+}
+
+/** Switch a reminder between one-tap Done and the Log form. */
+export function CompletionSwitch({ ruleId, value }: { ruleId: string; value: 'done' | 'log' }) {
+  const [busy, start] = useTransition();
+  const toast = useToast();
+  const set = (v: 'done' | 'log') => v !== value && start(async () => { const r = await setRuleCompletion(ruleId, v); toast.show(r.ok ? (r.message ?? '') : r.error); });
+  return (
+    <div className="row" style={{ gap: 8 }}>
+      <span className="small">When it&apos;s done:</span>
+      <div className="seg" style={{ flex: '0 1 240px' }} role="radiogroup" aria-label="When it's done">
+        <button type="button" role="radio" aria-checked={value === 'done'} className={value === 'done' ? 'on' : ''} disabled={busy} onClick={() => set('done')} style={{ minHeight: 32 }}>Tap Done</button>
+        <button type="button" role="radio" aria-checked={value === 'log'} className={value === 'log' ? 'on' : ''} disabled={busy} onClick={() => set('log')} style={{ minHeight: 32 }}>Log details</button>
+      </div>
+      {toast.node}
+    </div>
   );
 }

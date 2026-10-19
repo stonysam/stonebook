@@ -23,6 +23,10 @@ export interface PEvent {
 export interface PSlot {
   id: string; object_id: string; weekdays: number[]; starts_at: string; ends_at: string | null;
   drop_off_by: string | null; pick_up_by: string | null; active: boolean;
+  /** A one-off on this date (the dentist), or null for every week on its weekdays. */
+  on_date?: string | null;
+  /** Who goes; empty means the person it belongs to. */
+  people?: string[];
 }
 export interface PChange { slot_id: string; on_date: string; cancelled: boolean; drop_off_by: string | null; pick_up_by: string | null; note: string | null }
 
@@ -84,13 +88,15 @@ export function recipientsOf(d: PlanData, rule: PRule): string[] {
 export interface Session {
   slotId: string; objectId: string; date: string; startsAt: string; endsAt: string | null;
   dropOffBy: string | null; pickUpBy: string | null; cancelled: boolean; changed: boolean; note: string | null;
+  /** Who's going. */
+  people: string[];
 }
 
 /** Activities and work happening on a date, with that date's changes applied, earliest first. */
 export function sessionsOn(d: PlanData, date: string, objectId?: string): Session[] {
   const day = isoWeekday(date);
   return d.slots
-    .filter((s) => s.active && s.weekdays.includes(day) && (!objectId || s.object_id === objectId))
+    .filter((s) => s.active && s.weekdays.includes(day) && (!s.on_date || s.on_date === date) && (!objectId || s.object_id === objectId))
     .flatMap((slot) => {
       const object = d.objects.find((o) => o.id === slot.object_id);
       if (!object || object.archived_at) return [];
@@ -99,6 +105,7 @@ export function sessionsOn(d: PlanData, date: string, objectId?: string): Sessio
         slotId: slot.id, objectId: object.id, date, startsAt: slot.starts_at.slice(0, 5), endsAt: slot.ends_at?.slice(0, 5) ?? null,
         dropOffBy: c ? c.drop_off_by : slot.drop_off_by, pickUpBy: c ? c.pick_up_by : slot.pick_up_by,
         cancelled: c?.cancelled ?? false, changed: !!c, note: c?.note ?? null,
+        people: slot.people?.length ? slot.people : [object.owner_id],
       }];
     })
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
@@ -122,6 +129,14 @@ export const LIFT_LEAD = 45; // minutes
 const nameOf = (d: PlanData, id: string | null) => d.members.find((m) => m.id === id)?.display_name ?? 'someone';
 const objectOf = (d: PlanData, id: string) => d.objects.find((o) => o.id === id);
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+/** "Lucy", "Lucy and Benji", "the whole family"; leaves out `except` (the reader). */
+export function namesOf(d: PlanData, ids: string[], except?: string, wholeFamily = true): string {
+  if (wholeFamily && d.members.every((m) => ids.includes(m.id))) return 'the whole family';
+  const names = ids.filter((id) => id !== except).map((id) => nameOf(d, id));
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+}
 
 /**
  * The morning summary for one person: what's due today, overdue (on the usual reminder
@@ -150,11 +165,12 @@ export function morningSummary(d: PlanData, memberId: string, today: string): No
 
   const plans = sessionsOn(d, today).filter((s) => !s.cancelled).flatMap((s) => {
     const object = objectOf(d, s.objectId)!;
-    const mine = object.owner_id === memberId;
+    const mine = s.people.includes(memberId);
     const lifts = [s.dropOffBy === memberId ? `drop-off ${s.startsAt}` : null, s.pickUpBy === memberId && s.endsAt ? `pick-up ${s.endsAt}` : null,
       s.pickUpBy === memberId && !s.endsAt ? 'pick-up' : null].filter(Boolean);
     if (!mine && lifts.length === 0) return [];
-    const who = mine ? '' : ` (${nameOf(d, object.owner_id)})`;
+    const others = namesOf(d, s.people, memberId);
+    const who = others ? ` (${mine ? `with ${others}` : others})` : '';
     return [`${s.startsAt} ${object.name}${who}${lifts.length ? `, you do ${lifts.join(' and ')}` : ''}`];
   });
 
@@ -172,7 +188,7 @@ export function liftNotices(d: PlanData, memberId: string, today: string, minute
   for (const s of sessionsOn(d, today)) {
     if (s.cancelled) continue;
     const object = objectOf(d, s.objectId)!;
-    const kid = nameOf(d, object.owner_id);
+    const kid = namesOf(d, s.people, memberId, false) || 'yourself';
     const legs: [string | null, string | null, 'drop' | 'pick'][] = [[s.dropOffBy, s.startsAt, 'drop'], [s.pickUpBy, s.endsAt, 'pick']];
     for (const [driver, at, leg] of legs) {
       if (driver !== memberId || !at) continue;
@@ -245,10 +261,11 @@ export function calendarFor(d: PlanData, memberId: string, today: string): Calen
   for (let day = addDays(today, -7); day <= horizon; day = addDays(day, 1)) {
     for (const s of sessionsOn(d, day)) {
       const object = objectOf(d, s.objectId)!;
-      const mine = object.owner_id === memberId;
+      const mine = s.people.includes(memberId);
       const drives = [s.dropOffBy === memberId ? 'drop-off' : null, s.pickUpBy === memberId ? 'pick-up' : null].filter(Boolean);
       if (s.cancelled || (!mine && drives.length === 0)) continue;
-      const who = mine ? '' : ` (${nameOf(d, object.owner_id)})`;
+      const others = namesOf(d, s.people, memberId);
+      const who = others ? ` (${mine ? `with ${others}` : others})` : '';
       const driving = [s.dropOffBy ? `Drop-off: ${nameOf(d, s.dropOffBy)}` : null, s.pickUpBy ? `Pick-up: ${nameOf(d, s.pickUpBy)}` : null].filter(Boolean).join('. ');
       out.push({
         uid: `slot-${s.slotId}-${day}`,
