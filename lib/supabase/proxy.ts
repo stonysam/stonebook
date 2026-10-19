@@ -1,6 +1,7 @@
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './env';
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { KID_COOKIE, KID_PATHS } from '@/lib/kid';
 
 // /cal/ is the private calendar feed: calendar apps can't sign in, the link's token is the key.
 const PUBLIC_PATHS = ['/login', '/auth/callback', '/not-on-list', '/manifest.webmanifest', '/cal/'];
@@ -33,6 +34,13 @@ export async function updateSession(request: NextRequest) {
   if (!data?.claims && !PUBLIC_PATHS.some((p) => path.startsWith(p))) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
+  // Benji mode: this device stays on the child's screen until a parent's PIN unlocks it.
+  if (data?.claims && request.cookies.get(KID_COOKIE)?.value && !KID_PATHS.some((p) => path.startsWith(p))) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/kid';
     url.search = '';
     return NextResponse.redirect(url);
   }

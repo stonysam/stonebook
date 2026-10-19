@@ -4,6 +4,8 @@
 // row-level security and triggers still decide what is allowed; the checks here
 // are for friendly messages, not for safety.
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
+import { KID_COOKIE } from '@/lib/kid';
 import { redirect } from 'next/navigation';
 import { getMe } from '@/lib/auth';
 import { addDays, parseDate, todayIn } from '@/src/engine/dates';
@@ -363,4 +365,54 @@ export async function resetCalendarLink(): Promise<ActionResult> {
   if (error) return fail('Couldn’t make a link. Try again.');
   revalidatePath('/settings');
   return { ok: true, message: 'New link ready. Any old link has stopped working.' };
+}
+
+// ---------------------------------------------------------------------------
+// PINs and Benji mode on the family tablet
+// ---------------------------------------------------------------------------
+export async function setPin(memberId: string, pin: string): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  if (!/^\d{4}$/.test(pin)) return fail('A PIN is 4 digits.');
+  const { error } = await supabase.rpc('set_pin', { p_member: memberId, p_pin: pin });
+  if (error) return fail(error.message.includes('Only') ? 'Only Mum or Dad can set PINs.' : 'Couldn’t save the PIN.');
+  revalidatePath('/settings');
+  return { ok: true, message: 'PIN saved.' };
+}
+
+export async function startKidMode(childId: string): Promise<ActionResult> {
+  const { supabase, me } = await getMe();
+  if (me.role !== 'parent') return fail('Only Mum or Dad can do that.');
+  const { data: set } = await supabase.rpc('pins_set');
+  const ids = new Set(((set ?? []) as unknown as string[]).map(String));
+  if (!ids.has(me.id)) return fail('Set your own PIN first, so you can get back out.');
+  if (!ids.has(childId)) return fail('Set the child’s PIN first.');
+  (await cookies()).set(KID_COOKIE, childId, { httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 24 * 365 });
+  redirect('/kid');
+}
+
+export async function exitKidMode(pin: string): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  const { data, error } = await supabase.rpc('check_parent_pin', { p_pin: pin });
+  if (error) return fail('Couldn’t check that. Try again.');
+  if (data === 'locked') return fail('Too many tries. Wait 15 minutes.');
+  if (data === 'none') return fail('No parent PIN is set.');
+  if (data !== 'ok') return fail('That’s not right.');
+  (await cookies()).delete(KID_COOKIE);
+  redirect('/');
+}
+
+export async function kidDone(input: { childId: string; objectId: string; ruleId: string | null; pin: string }): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  const jar = await cookies();
+  if (jar.get(KID_COOKIE)?.value !== input.childId) return fail('This tablet isn’t in that mode.');
+  const { data, error } = await supabase.rpc('child_log', {
+    p_child: input.childId, p_pin: input.pin, p_object: input.objectId, p_rule: input.ruleId as string,
+  });
+  if (error) return fail('Something went wrong. Ask Mum or Dad.');
+  const r = data as { result: string; waiting?: boolean };
+  if (r.result === 'locked') return fail('Too many tries. Ask Mum or Dad.');
+  if (r.result === 'none') return fail('Ask Mum or Dad to set your PIN.');
+  if (r.result !== 'ok') return fail('Oops, that’s not your PIN. Try again.');
+  revalidatePath('/kid');
+  return { ok: true, waiting: !!r.waiting };
 }

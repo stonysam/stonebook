@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState, useTransition } from 'react';
 import { addRule, addSlot, correctEvent, setArchived, stopRule, stopSlot, updateDetails, type ActionResult } from '@/app/actions';
 import { isActivity } from '@/lib/types';
 import { ActivityFields } from './activity-fields';
+import { CHORE_PICTURES, ChoreIcon } from './chore-icons';
 import type { FieldDefRow, MemberRow, Visibility } from '@/lib/database.types';
 import { ScheduleFields } from './schedule-fields';
 import { useToast } from './toast';
@@ -12,6 +13,7 @@ export function FieldInput({ def, value, members }: { def: FieldDefRow; value: u
   const name = `f_${def.key}`;
   const v = value == null ? '' : String(value);
   const label = `${def.label}${def.required ? '' : ' (optional)'}`;
+  if (def.key === 'picture') return <PicturePicker name={name} initial={v} label={label} />;
   if (def.kind === 'choice') {
     const opts = Array.isArray(def.options) ? (def.options as string[]) : [];
     return (
@@ -38,6 +40,24 @@ export function FieldInput({ def, value, members }: { def: FieldDefRow; value: u
       <input name={name} defaultValue={v} required={def.required}
         type={def.kind === 'date' ? 'date' : 'text'} inputMode={def.kind === 'number' ? 'decimal' : undefined} />
     </label>
+  );
+}
+
+function PicturePicker({ name, initial, label }: { name: string; initial: string; label: string }) {
+  const [pick, setPick] = useState(initial);
+  return (
+    <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
+      <legend className="small" style={{ marginBottom: 8 }}>{label}</legend>
+      <input type="hidden" name={name} value={pick} />
+      <div className="wrap" style={{ gap: 6 }}>
+        {CHORE_PICTURES.map((p) => (
+          <button key={p} type="button" className="day" aria-pressed={pick === p} aria-label={p} onClick={() => setPick(pick === p ? '' : p)}
+            style={{ width: 52, height: 52, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ChoreIcon name={p} size={30} />
+          </button>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 

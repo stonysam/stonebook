@@ -548,3 +548,55 @@ describe('private calendar links', () => {
     expect(await as('sam', () => rows('select * from calendar_links where member_id = $1', [id.eldest]))).toEqual([]);
   });
 });
+
+describe('Benji mode on the family tablet', () => {
+  let chore: string;
+  const childLog = (who: keyof typeof authId, pin: string, objectId = chore) => as(who, async () =>
+    (await rows('select child_log($1, $2, $3, null) as r', [id.child, pin, objectId]))[0].r as { result: string; waiting?: boolean });
+
+  beforeAll(async () => {
+    chore = await as('sam', () => addObject({ name: 'Make my bed', type: 'Chore or task', owner: id.child }));
+  });
+
+  it('only a parent sets PINs: their own or a child’s, four digits', async () => {
+    await as('sam', () => db.query(`select set_pin($1, '4321')`, [id.child]));
+    await as('sam', () => db.query(`select set_pin($1, '1111')`, [id.sam]));
+    await expect(as('sam', () => db.query(`select set_pin($1, '2222')`, [id.crystal]))).rejects.toThrow(/own PIN or a child/);
+    await expect(as('sam', () => db.query(`select set_pin($1, '12a4')`, [id.child]))).rejects.toThrow(/4 digits/);
+    await expect(as('eldest', () => db.query(`select set_pin($1, '1234')`, [id.child]))).rejects.toThrow(/Only Mum or Dad/);
+    const set = (await as('sam', () => rows('select pins_set as id from pins_set()'))).map((r) => r.id).sort();
+    expect(set).toEqual([id.sam, id.child].sort());
+    expect(await as('eldest', () => rows('select * from pins_set()'))).toEqual([]);
+  });
+
+  it('Benji’s chore is saved as his and waits for a parent; a wrong PIN saves nothing', async () => {
+    expect(await childLog('sam', '0000')).toEqual({ result: 'wrong' });
+    expect(await childLog('sam', '4321')).toEqual({ result: 'ok', waiting: true });
+    const logged = await rows('select created_by, needs_confirmation from events where object_id = $1', [chore]);
+    expect(logged).toEqual([{ created_by: id.child, needs_confirmation: true }]);
+  });
+
+  it('five wrong tries lock his PIN, even for the right one, until a parent resets it', async () => {
+    for (let i = 0; i < 4; i++) expect((await childLog('sam', '9999')).result).toBe('wrong');
+    expect((await childLog('sam', '9999')).result).toBe('locked');
+    expect((await childLog('sam', '4321')).result).toBe('locked');
+    await as('sam', () => db.query(`select set_pin($1, '4321')`, [id.child]));
+    expect((await childLog('sam', '4321')).result).toBe('ok');
+  });
+
+  it('only works on a parent’s tablet, and only for his own chores', async () => {
+    await expect(childLog('eldest', '4321')).rejects.toThrow(/family tablet/);
+    await expect(childLog('sam', '4321', car)).rejects.toThrow(/Not one of their chores/);
+  });
+
+  it('either parent’s PIN takes the tablet out of Benji mode', async () => {
+    expect((await as('crystal', () => rows(`select check_parent_pin('2222') as r`)))[0].r).toBe('wrong');
+    expect((await as('crystal', () => rows(`select check_parent_pin('1111') as r`)))[0].r).toBe('ok');
+    await expect(as('junior', () => rows(`select check_parent_pin('1111')`))).rejects.toThrow(/family tablet/);
+  });
+
+  it('nobody can read PIN hashes or call the checker directly', async () => {
+    await expect(as('sam', () => rows('select * from member_pins'))).rejects.toThrow(/permission denied/);
+    await expect(as('sam', () => rows(`select app.check_pin($1, '4321')`, [id.child]))).rejects.toThrow(/permission denied/);
+  });
+});

@@ -56,6 +56,7 @@ join (values
   ('Subscription',    'currency',      'Currency',           'choice', '["CZK","EUR","USD","GBP"]', false, 30),
   ('Subscription',    'period',        'Billed',             'choice', '["Monthly","Yearly","Other"]', false, 40),
 
+  ('Chore or task',   'picture',       'Picture (for younger kids)', 'choice', '["hens","eggs","dog","cat","bin","dishes","table","bed","toys","laundry","plants","teeth","book","broom","logs","star"]', false, 5),
   ('Chore or task',   'instructions',  'How to do it',       'text',   null, false, 10),
 
   ('Activity or work','place',         'Where',              'text',   null, false, 10),

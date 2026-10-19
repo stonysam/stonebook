@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/auth', () => ({ getMe: vi.fn() }));
 vi.mock('react', async (orig) => ({ ...(await orig<typeof import('react')>()), cache: <T,>(fn: T) => fn }));
 
-const { dueFor, suggestedKinds, toEngineRule, canEditObject, recentThings, sessionsOn, choresOf } = await import('../lib/world');
+const { dueFor, suggestedKinds, toEngineRule, canEditObject, recentThings, sessionsOn, choresOf, kidToday } = await import('../lib/world');
 const { whenText } = await import('../lib/format');
 import type { EventRow, MemberRow, ObjectRow, RuleRow } from '../lib/database.types';
 import type { World } from '../lib/world';
@@ -135,5 +135,20 @@ describe('activities', () => {
     expect(sessionsOn(w, '2026-10-22')[0]).toMatchObject({ startsAt: '17:00', endsAt: '19:00', dropOffBy: 'crystal', changed: false });
     expect(sessionsOn(w, '2026-10-29')[0]).toMatchObject({ dropOffBy: 'sam', changed: true });
     expect(sessionsOn(w, '2026-10-23')).toEqual([]);
+  });
+});
+
+describe('Benji’s screen', () => {
+  it('shows today’s chores to do, waiting, or done, and counts this week’s approved ones as stars', () => {
+    const w = world([
+      rule('bed', 'hens', { kind: 'weekly', weekdays: [7], owner_id: 'benji', created_at: '2026-10-18T06:00:00Z' }),
+      rule('toys', 'chain', { kind: 'weekly', weekdays: [7], owner_id: 'benji', created_at: '2026-10-18T06:00:00Z' }),
+      rule('later', 'car', { kind: 'weekly', weekdays: [3], owner_id: 'benji', created_at: '2026-10-18T06:00:00Z' }),
+    ], [{ ...event('e1', 'chain', 'Done', '2026-10-18'), created_by: 'benji' }, { ...event('e0', 'hens', 'Done', '2026-10-11'), created_by: 'benji' }]);
+    w.objects[1].field_values = { picture: 'hens' };
+    const { chores, starsThisWeek } = kidToday(w, 'benji'); // Sunday 18 Oct
+    expect(chores.map((c) => [c.object.id, c.state])).toEqual([['hens', 'todo'], ['chain', 'done']]);
+    expect(chores[0].picture).toBe('hens');
+    expect(starsThisWeek).toBe(1); // Sunday 11th was last week
   });
 });

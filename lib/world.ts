@@ -4,7 +4,7 @@
 import { cache } from 'react';
 import { computeDue, type DueResult } from '@/src/engine/due';
 import * as plan from '@/src/engine/plan';
-import { addDays, daysBetween, todayIn } from '@/src/engine/dates';
+import { addDays, daysBetween, isoWeekday, todayIn } from '@/src/engine/dates';
 import { getMe } from '@/lib/auth';
 import { dayLabel } from '@/lib/format';
 import type { ActivityChangeRow, ActivitySlotRow, AwaitingRow, EventRow, FieldDefRow, MemberRow, ObjectRow, ObjectTypeRow, RuleRow } from '@/lib/database.types';
@@ -199,4 +199,27 @@ export function choresOf(w: World, memberId: string): { object: ObjectRow; rules
     })
     .filter((x) => x.counts)
     .map(({ object, rules }) => ({ object, rules }));
+}
+
+export interface KidChore { rule: RuleRow; object: ObjectRow; state: 'todo' | 'waiting' | 'done'; picture: string | null }
+
+/** A child's list for today on the family tablet: what's due, waiting for a parent, or done. */
+export function kidToday(w: World, childId: string): { chores: KidChore[]; starsThisWeek: number } {
+  const chores: KidChore[] = [];
+  for (const rule of w.rules) {
+    if (rule.owner_id !== childId || rule.kind === 'record') continue;
+    const d = dueFor(w, rule);
+    if (!d) continue;
+    const doneToday = eventsForRule(w, rule).some((e) => e.occurred_on === w.today && e.created_by === childId);
+    const waiting = w.pending.some((p) => p.object_id === rule.object_id && p.created_by === childId && p.occurred_on === w.today);
+    const dueNow = !!d.due.dueOn && d.due.dueOn <= w.today && d.due.status !== 'done';
+    if (!dueNow && !doneToday && !waiting) continue;
+    const picture = ((d.object.field_values ?? {}) as Record<string, unknown>).picture;
+    chores.push({ rule, object: d.object, state: waiting ? 'waiting' : doneToday ? 'done' : 'todo', picture: typeof picture === 'string' ? picture : null });
+  }
+  const order = { todo: 0, waiting: 1, done: 2 };
+  chores.sort((a, b) => order[a.state] - order[b.state] || a.object.name.localeCompare(b.object.name));
+  const monday = addDays(w.today, 1 - isoWeekday(w.today));
+  const starsThisWeek = w.events.filter((e) => e.created_by === childId && e.occurred_on >= monday).length;
+  return { chores, starsThisWeek };
 }

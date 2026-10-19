@@ -2,6 +2,7 @@ import Link from '@/components/link';
 import { notFound } from 'next/navigation';
 import { FixEntry, ItemActions, StopRuleButton, StopSlotButton } from '@/components/item-tools';
 import { LogButton } from '@/components/log-button';
+import { ChoreIcon } from '@/components/chore-icons';
 import { SessionCard } from '@/components/session-card';
 import { dateText, possessive, whenText, WEEKDAYS } from '@/lib/format';
 import { isActivity, isChore } from '@/lib/types';
@@ -120,7 +121,7 @@ export default async function ItemPage({ params, searchParams }: {
             <h2 className="eyebrow">Details</h2>
             <div className="list">
               {defs.map((d) => {
-                const v = showValue(d.key, d.kind);
+                const v = d.key === 'picture' && values.picture ? <ChoreIcon name={String(values.picture)} size={28} /> : showValue(d.key, d.kind);
                 return (
                   <div key={d.id} className="list-item" style={{ justifyContent: 'space-between' }}>
                     <span className="muted">{d.label}</span>

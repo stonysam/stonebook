@@ -80,6 +80,10 @@ export type Database = {
       calendar_link_reset: { Args: never; Returns: string };
       calendar_data: { Args: { p_token: string }; Returns: Json };
       push_public_key: { Args: never; Returns: string | null };
+      set_pin: { Args: { p_member: string; p_pin: string }; Returns: undefined };
+      pins_set: { Args: never; Returns: string[] };
+      child_log: { Args: { p_child: string; p_pin: string; p_object: string; p_rule: string }; Returns: Json };
+      check_parent_pin: { Args: { p_pin: string }; Returns: string };
     };
     Enums: { member_role: MemberRole; visibility: Visibility; field_kind: FieldKind; rule_kind: RuleKindDb };
     CompositeTypes: Record<string, never>;
