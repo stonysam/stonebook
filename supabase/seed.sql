@@ -1,16 +1,18 @@
 -- Starter object types and fields. Parents can add more from the app.
 -- Run once after the migrations (Supabase runs supabase/seed.sql on `supabase db reset`).
 
-insert into public.object_types (name, icon, sort_order, confirm_kid_logs) values
-  ('Person',         'user',     10, false),
-  ('Vehicle',        'car',      20, false),
-  ('Machine',        'tractor',  30, false),
-  ('Animal or flock','paw',      40, false),
-  ('Home system',    'home',     50, false),
-  ('Document',       'id-card',  60, false),
-  ('Bill',           'receipt',  70, false),
-  ('Subscription',   'repeat',   80, false),
-  ('Chore',          'check',    90, true);
+insert into public.object_types (name, icon, sort_order, confirm_kid_logs, assignable) values
+  ('Person',          'user',     10, false, false),
+  ('Activity or work','calendar', 15, false, false),
+  ('Vehicle',         'car',      20, false, false),
+  ('Machine',         'tractor',  30, false, false),
+  ('Animal or flock', 'paw',      40, false, false),
+  ('Home system',     'home',     50, false, false),
+  ('Document',        'id-card',  60, false, false),
+  ('Bill',            'receipt',  70, false, false),
+  ('Subscription',    'repeat',   80, false, false),
+  ('Chore or task',   'check',    90, true,  true)
+on conflict (name) do nothing;
 
 with t as (select id, name from public.object_types)
 insert into public.field_defs (object_type_id, key, label, kind, options, required, sort_order)
@@ -54,6 +56,10 @@ join (values
   ('Subscription',    'currency',      'Currency',           'choice', '["CZK","EUR","USD","GBP"]', false, 30),
   ('Subscription',    'period',        'Billed',             'choice', '["Monthly","Yearly","Other"]', false, 40),
 
-  ('Chore',           'instructions',  'How to do it',       'text',   null, false, 10)
+  ('Chore or task',   'instructions',  'How to do it',       'text',   null, false, 10),
+
+  ('Activity or work','place',         'Where',              'text',   null, false, 10),
+  ('Activity or work','contact',       'Contact (leader, coach, manager)', 'text', null, false, 20)
 ) as f(type_name, key, label, kind, options, required, sort_order)
-  on f.type_name = t.name;
+  on f.type_name = t.name
+on conflict (object_type_id, key) do nothing;

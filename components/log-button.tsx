@@ -11,6 +11,10 @@ export interface LogTarget {
   objectName: string;
   kinds: string[];
   meterUnit: string | null;
+  /** Items with turns (dishes): whose turn this was. */
+  turns?: { ruleId: string; label: string; ownerId: string }[];
+  ruleId?: string | null;
+  meId?: string;
 }
 
 export function LogButton({ target, today, kidName, label = 'Log', className = 'btn btn-primary', style }: {
@@ -54,6 +58,9 @@ function LogSheet({ target, today, onClose, onLogged }: {
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, start] = useTransition();
+  const turns = target.turns ?? [];
+  const [turn, setTurn] = useState<string | null>(
+    target.ruleId ?? turns.find((t) => t.ownerId === target.meId)?.ruleId ?? turns[0]?.ruleId ?? null);
 
   const kindName = kind === 'other' ? other.trim() : kinds[kind];
   const occurredOn = when === 'today' ? today : when === 'yesterday' ? addDays(today, -1) : picked;
@@ -65,7 +72,7 @@ function LogSheet({ target, today, onClose, onLogged }: {
       const res = await logEvent({
         objectId: target.objectId, kind: kindName, occurredOn,
         meterValue: meter ? Number(meter.replace(/\s/g, '').replace(',', '.')) : null,
-        meterUnit: target.meterUnit, note,
+        meterUnit: target.meterUnit, note, ruleId: turns.length ? turn : target.ruleId ?? null,
       });
       if (res.ok) onLogged(!!res.waiting);
       else setError(res.error);
@@ -97,6 +104,17 @@ function LogSheet({ target, today, onClose, onLogged }: {
             </label>
           )}
         </fieldset>
+
+        {turns.length > 0 && (
+          <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend className="small" style={{ marginBottom: 8 }}>Whose turn was it?</legend>
+            <div className="wrap">
+              {turns.map((t) => (
+                <button key={t.ruleId} type="button" className="chip" aria-pressed={turn === t.ruleId} onClick={() => setTurn(t.ruleId)}>{t.label}</button>
+              ))}
+            </div>
+          </fieldset>
+        )}
 
         <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="small" style={{ marginBottom: 8 }}>When?</legend>

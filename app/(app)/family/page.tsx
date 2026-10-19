@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { loadWorld } from '@/lib/world';
+import Link from '@/components/link';
+import { choresOf, loadWorld } from '@/lib/world';
 
 export const metadata = { title: 'Family · Stonebook' };
 
@@ -12,7 +12,7 @@ export default async function Family() {
       <h1>Family</h1>
       <section className="list" aria-label="Family members">
         {w.members.map((m) => {
-          const chores = w.objects.filter((o) => o.owner_id === m.id && !o.archived_at && w.types.find((t) => t.id === o.object_type_id)?.name === 'Chore').length;
+          const chores = choresOf(w, m.id).length;
           return (
             <Link key={m.id} href={`/family/${m.id}`} className="list-item">
               <span style={{ width: 40, height: 40, borderRadius: 20, background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }} aria-hidden="true">
@@ -20,7 +20,7 @@ export default async function Family() {
               </span>
               <span style={{ flex: '1 1 auto' }}>
                 <span className="item-title" style={{ display: 'block' }}>{m.id === w.me.id ? `${m.display_name} (you)` : m.display_name}</span>
-                <span className="small">{ROLE[m.role]}{chores ? ` · ${chores} chore${chores === 1 ? '' : 's'}` : ''}</span>
+                <span className="small">{ROLE[m.role]}{chores ? ` · ${chores === 1 ? '1 chore or task' : `${chores} chores and tasks`}` : ''}</span>
               </span>
               <span aria-hidden="true" className="muted">›</span>
             </Link>

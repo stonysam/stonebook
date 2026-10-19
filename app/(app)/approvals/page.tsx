@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/link';
 import { DecideButtons } from '@/components/decide-buttons';
 import { dateText } from '@/lib/format';
 import { loadWorld, memberName } from '@/lib/world';

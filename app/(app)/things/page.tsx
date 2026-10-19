@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/link';
 import { dateText } from '@/lib/format';
 import { eventsOf, loadWorld, memberName, typeOf } from '@/lib/world';
 

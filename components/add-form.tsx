@@ -2,32 +2,33 @@
 
 import { useActionState, useState } from 'react';
 import { createItem } from '@/app/actions';
-import type { FieldDefRow, MemberRow } from '@/lib/database.types';
+import type { FieldDefRow, MemberRow, Visibility } from '@/lib/database.types';
+import { isActivity, isChore, typeUi } from '@/lib/types';
+import { ActivityFields } from './activity-fields';
 import { FieldInput, VisibilityPicker } from './item-tools';
 import { ScheduleFields } from './schedule-fields';
 
-const PLACEHOLDER: Record<string, string> = {
-  Chore: 'e.g. Feed the hens', Vehicle: 'e.g. Kia', Machine: 'e.g. Chainsaw', 'Animal or flock': 'e.g. Sheep flock',
-  'Home system': 'e.g. Well water filter', Document: 'e.g. Ziah’s passport', Bill: 'e.g. Electricity', Subscription: 'e.g. Netflix', Person: 'e.g. Benji',
-};
-
-export function AddForm({ typeId, typeName, defs, members, owners, meId, initialOwner }: {
-  typeId: string; typeName: string; defs: FieldDefRow[]; members: MemberRow[]; owners: MemberRow[]; meId: string; initialOwner: string;
+export function AddForm({ typeId, typeName, defs, members, owners, meId, isParent, initialOwner, today }: {
+  typeId: string; typeName: string; defs: FieldDefRow[]; members: MemberRow[]; owners: MemberRow[]; meId: string;
+  isParent: boolean; initialOwner: string; today: string;
 }) {
   const [state, action, pending] = useActionState(createItem, null);
   const [owner, setOwner] = useState(initialOwner);
+  const ui = typeUi(typeName);
   const ownerName = (m: MemberRow) => (m.id === meId ? 'Me' : m.display_name);
+  const givingAway = !isParent && owner !== meId; // a chore or task for someone else: always shared
+  const initialVis: Visibility = typeName === 'Document' || typeName === 'Person' ? 'personal' : 'shared';
 
   return (
     <form action={action} className="stack" style={{ gap: 18 }}>
       <input type="hidden" name="type_id" value={typeId} />
-      <label className="field">Name
-        <input name="name" required maxLength={120} placeholder={PLACEHOLDER[typeName] ?? 'Give it a name'} autoFocus />
+      <label className="field">{isChore(typeName) ? 'What needs doing?' : 'Name'}
+        <input name="name" required maxLength={120} placeholder={ui.placeholder} autoFocus />
       </label>
 
       {owners.length > 1 && (
         <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-          <legend className="small" style={{ marginBottom: 8 }}>{typeName === 'Chore' ? 'Whose chore?' : 'Who looks after it?'}</legend>
+          <legend className="small" style={{ marginBottom: 8 }}>{ui.ownerQuestion}</legend>
           <input type="hidden" name="owner_id" value={owner} />
           <div className="wrap">
             {owners.map((m) => (
@@ -38,11 +39,15 @@ export function AddForm({ typeId, typeName, defs, members, owners, meId, initial
       )}
       {owners.length === 1 && <input type="hidden" name="owner_id" value={owners[0].id} />}
 
-      <VisibilityPicker key={owner} initial={typeName === 'Document' || typeName === 'Person' ? 'personal' : 'shared'} canPrivate={owner === meId} />
+      {givingAway
+        ? <><input type="hidden" name="visibility" value="shared" /><span className="small">Shared with the family, so you can both see it.</span></>
+        : <VisibilityPicker key={owner} initial={initialVis} canPrivate={owner === meId} />}
 
       {defs.map((d) => <FieldInput key={d.id} def={d} value={null} members={members} />)}
 
-      <ScheduleFields typeName={typeName} />
+      {isActivity(typeName)
+        ? <ActivityFields members={members} meId={meId} />
+        : <ScheduleFields typeName={typeName} members={members} owner={owner} meId={meId} today={today} inAddForm />}
 
       {state && !state.ok && <p role="alert" style={{ margin: 0, fontWeight: 600 }}>{state.error}</p>}
       <button className="btn btn-primary btn-big" disabled={pending}>{pending ? 'Saving…' : 'Save'}</button>

@@ -1,9 +1,14 @@
-import Link from 'next/link';
+import Link from '@/components/link';
 import { notFound } from 'next/navigation';
-import { FixEntry, ItemActions, StopRuleButton } from '@/components/item-tools';
+import { FixEntry, ItemActions, StopRuleButton, StopSlotButton } from '@/components/item-tools';
 import { LogButton } from '@/components/log-button';
-import { dateText, possessive, whenText } from '@/lib/format';
-import { canEditObject, dueFor, eventsOf, loadWorld, memberName, meterUnitFor, suggestedKinds, typeOf } from '@/lib/world';
+import { SessionCard } from '@/components/session-card';
+import { dateText, possessive, whenText, WEEKDAYS } from '@/lib/format';
+import { isActivity, isChore } from '@/lib/types';
+import {
+  canEditObject, driverOptions, dueFor, eventsOf, loadWorld, memberName, meterUnitFor, sessionView, suggestedKinds, turnsOf, typeOf,
+  upcomingSessions,
+} from '@/lib/world';
 
 export default async function ItemPage({ params, searchParams }: {
   params: Promise<{ id: string }>; searchParams: Promise<{ kind?: string; added?: string }>;
@@ -25,6 +30,11 @@ export default async function ItemPage({ params, searchParams }: {
   const editable = canEditObject(w, o);
   const kid = w.me.role === 'junior' || w.me.role === 'child';
   const owner = o.owner_id === w.me.id ? 'you' : memberName(w, o.owner_id);
+  const activity = isActivity(type?.name);
+  const slots = w.slots.filter((x) => x.object_id === o.id);
+  const sessions = activity ? upcomingSessions(w, o.id).slice(0, 8) : [];
+  const { drivers, names } = driverOptions(w);
+  const days = (ds: number[]) => ds.map((d) => WEEKDAYS[d - 1][2].slice(0, 3)).join(', ').replace(/, ([^,]*)$/, ' and $1');
   const showValue = (key: string, kindOf: string) => {
     const v = values[key];
     if (v == null || v === '') return null;
@@ -47,10 +57,10 @@ export default async function ItemPage({ params, searchParams }: {
 
           {w.me.role !== 'child' && !o.archived_at && (
             <LogButton
-              target={{ objectId: o.id, objectName: o.name, kinds: suggestedKinds(w, o.id), meterUnit: meterUnitFor(w, o.id) }}
+              target={{ objectId: o.id, objectName: o.name, kinds: suggestedKinds(w, o.id), meterUnit: meterUnitFor(w, o.id), turns: turnsOf(w, o.id), meId: w.me.id }}
               today={w.today}
               kidName={kid ? w.me.display_name : null}
-              label={type?.name === 'Chore' ? 'Mark done' : 'Log something'}
+              label={isChore(type?.name) ? 'Mark done' : 'Log something'}
               className="btn btn-primary btn-big btn-block"
             />
           )}
@@ -61,12 +71,33 @@ export default async function ItemPage({ params, searchParams }: {
               visibility={o.visibility} shareWithFamily={o.share_with_family}
               canPrivate={o.owner_id === w.me.id && o.created_by === w.me.id}
               defs={defs} values={values} members={w.members}
+              ownerId={o.owner_id} meId={w.me.id} today={w.today} canRemind
             />
           )}
 
+          {activity && (
+            <section className="stack" aria-label="When it happens">
+              <h2 className="eyebrow">When it happens</h2>
+              {slots.length === 0 && <div className="card small">No times yet. {editable ? 'Add them with “Add times” above.' : ''}</div>}
+              {slots.map((x) => (
+                <div key={x.id} className="card stack" style={{ gap: 4 }}>
+                  <strong>Every {days(x.weekdays)}, {x.starts_at.slice(0, 5)}{x.ends_at ? `–${x.ends_at.slice(0, 5)}` : ''}</strong>
+                  <span className="muted" style={{ fontSize: 14 }}>
+                    {[x.drop_off_by ? `Drop-off: ${names[x.drop_off_by]}` : null, x.pick_up_by ? `Pick-up: ${names[x.pick_up_by]}` : null].filter(Boolean).join(' · ') || 'No lift needed'}
+                  </span>
+                  {editable && <StopSlotButton slotId={x.id} />}
+                </div>
+              ))}
+              {sessions.length > 0 && <h2 className="eyebrow">Next few times</h2>}
+              {sessions.map((x) => (
+                <SessionCard key={`${x.slot.id}-${x.date}`} s={sessionView(w, x)} drivers={drivers} names={names} canChange={editable} showTitle={false} />
+              ))}
+            </section>
+          )}
+
           <section className="stack" aria-label="What's coming up">
-            <h2 className="eyebrow">What&apos;s coming up</h2>
-            {rules.length === 0 && <div className="card small">No reminders. {editable ? 'Add one above if it needs doing regularly.' : ''}</div>}
+            <h2 className="eyebrow">{activity ? 'Reminders' : 'What’s coming up'}</h2>
+            {rules.length === 0 && <div className="card small">No reminders. {editable && !activity ? 'Add one above if it needs doing regularly.' : ''}</div>}
             {rules.map((d) => (
               <div key={d.rule.id} className="card stack" style={{ gap: 4 }}>
                 <div className="row">
@@ -77,7 +108,7 @@ export default async function ItemPage({ params, searchParams }: {
                   </strong>
                 </div>
                 <span className="muted" style={{ fontSize: 14 }}>{d.due.basis}</span>
-                {d.rule.owner_id !== o.owner_id && <span className="small">Reminds {memberName(w, d.rule.owner_id)}</span>}
+                {d.rule.owner_id !== o.owner_id && <span className="small">{isChore(type?.name) ? `${possessive(memberName(w, d.rule.owner_id))} turn` : `Reminds ${memberName(w, d.rule.owner_id)}`}</span>}
                 {editable && <StopRuleButton ruleId={d.rule.id} />}
               </div>
             ))}

@@ -81,7 +81,7 @@ beforeAll(async () => {
   crystalPassport = await addObject({ name: "Crystal's passport", type: 'Document', owner: id.crystal, visibility: 'personal', fields: { doc_type: 'Passport' } });
   eldestPassport = await addObject({ name: "Eldest's passport", type: 'Document', owner: id.eldest, visibility: 'personal', fields: { doc_type: 'Passport' } });
   secondInsurance = await addObject({ name: "Second's insurance card", type: 'Document', owner: id.second, visibility: 'personal', share: true, fields: { doc_type: 'Health insurance card' } });
-  eldestDiary = await as('eldest', () => addObject({ name: 'Uni deadlines', type: 'Chore', owner: id.eldest, visibility: 'private' }));
+  eldestDiary = await as('eldest', () => addObject({ name: 'Uni deadlines', type: 'Chore or task', owner: id.eldest, visibility: 'private' }));
 });
 
 describe('sign-in and the allow-list', () => {
@@ -145,15 +145,16 @@ describe('who sees what', () => {
 
 describe('private items', () => {
   it('the 14-year-old can add their own private homework item that parents cannot see', async () => {
-    await as('junior', () => addObject({ name: 'Maths homework', type: 'Chore', owner: id.junior, visibility: 'private' }));
+    await as('junior', () => addObject({ name: 'Maths homework', type: 'Chore or task', owner: id.junior, visibility: 'private' }));
     expect(await as('junior', () => names('select name from objects where owner_id = $1', [id.junior]))).toEqual(['Maths homework']);
     expect(await as('sam', () => names('select name from objects where owner_id = $1', [id.junior]))).toEqual([]);
   });
 
-  it('nobody can create an item for someone else, except parents (and never a private one)', async () => {
-    await expect(as('junior', () => addObject({ name: 'x', type: 'Chore', owner: id.eldest }))).rejects.toThrow(/row-level security/);
-    await expect(as('sam', () => addObject({ name: 'y', type: 'Chore', owner: id.junior, visibility: 'private' }))).rejects.toThrow(/row-level security/);
-    await expect(as('sam', () => addObject({ name: 'Feed chickens', type: 'Chore', owner: id.junior }))).resolves.toBeTruthy();
+  it('nobody can create an item for someone else, except parents and chores or tasks (and never a private one)', async () => {
+    await expect(as('junior', () => addObject({ name: 'x', type: 'Vehicle', owner: id.eldest }))).rejects.toThrow(/row-level security/);
+    await expect(as('junior', () => addObject({ name: 'x', type: 'Chore or task', owner: id.eldest, visibility: 'personal' }))).rejects.toThrow(/row-level security/);
+    await expect(as('sam', () => addObject({ name: 'y', type: 'Chore or task', owner: id.junior, visibility: 'private' }))).rejects.toThrow(/row-level security/);
+    await expect(as('sam', () => addObject({ name: 'Feed chickens', type: 'Chore or task', owner: id.junior }))).resolves.toBeTruthy();
   });
 
   it('a parent cannot switch someone else\'s item to private, or touch a private one', async () => {
@@ -176,7 +177,7 @@ describe('private items', () => {
   });
 
   it('a chore a parent assigned cannot be hidden from parents', async () => {
-    const chore = await as('crystal', () => addObject({ name: 'Muck out the shed', type: 'Chore', owner: id.junior }));
+    const chore = await as('crystal', () => addObject({ name: 'Muck out the shed', type: 'Chore or task', owner: id.junior }));
     await expect(as('junior', () => db.query(`update objects set visibility = 'private' where id = $1`, [chore])))
       .rejects.toThrow(/row-level security/);
     // and the app can't fake who created it
@@ -279,7 +280,7 @@ describe('kids\' chores wait for a parent', () => {
 
   let hens: string;
   beforeAll(async () => {
-    hens = await as('sam', () => addObject({ name: 'Feed the hens', type: 'Chore', owner: id.junior }));
+    hens = await as('sam', () => addObject({ name: 'Feed the hens', type: 'Chore or task', owner: id.junior }));
   });
 
   it('the 14-year-old\'s chore waits, and the app cannot skip the wait', async () => {
@@ -295,7 +296,7 @@ describe('kids\' chores wait for a parent', () => {
   it('17 and 21 count straight away, and so do a kid\'s own chores', async () => {
     const [byMember] = await log('eldest', id.eldest, hens);
     expect(byMember.needs_confirmation).toBe(false);
-    const own = await as('junior', () => addObject({ name: 'Tidy my desk', type: 'Chore', owner: id.junior }));
+    const own = await as('junior', () => addObject({ name: 'Tidy my desk', type: 'Chore or task', owner: id.junior }));
     const [byJunior] = await log('junior', id.junior, own);
     expect(byJunior.needs_confirmation).toBe(false);
   });
@@ -410,12 +411,94 @@ describe('family feed and reactions', () => {
 
 describe('weekly rules', () => {
   it('a chore on set days needs valid weekdays', async () => {
-    const chore = await as('sam', () => addObject({ name: 'Collect the eggs', type: 'Chore', owner: id.second }));
+    const chore = await as('sam', () => addObject({ name: 'Collect the eggs', type: 'Chore or task', owner: id.second }));
     const add = (days: string | null) => as('sam', () => db.query(
       `insert into rules (object_id, name, kind, event_kind, weekdays, owner_id) values ($1, 'Eggs', 'weekly', 'done', $2::smallint[], $3)`,
       [chore, days, id.second]));
     await expect(add('{2,5}')).resolves.toBeTruthy();
     await expect(add(null)).rejects.toThrow(/weekly_shape/);
     await expect(add('{8}')).rejects.toThrow(/weekdays_valid/);
+  });
+});
+
+describe('chores and tasks anyone can hand out', () => {
+  it('the 14-year-old gives a shared task to the 21-year-old and can still change it; others cannot', async () => {
+    const task = await as('junior', () => addObject({ name: 'Return my library book', type: 'Chore or task', owner: id.eldest }));
+    await expect(as('junior', () => db.query(
+      `insert into rules (object_id, name, kind, event_kind, due_on, owner_id) values ($1, 'Do it', 'fixed_date', 'Done', '2026-10-25', $2)`,
+      [task, id.eldest]))).resolves.toBeTruthy();
+    expect((await as('junior', () => db.query(`update objects set name = 'Return the library book' where id = $1`, [task]))).affectedRows).toBe(1);
+    expect((await as('second', () => db.query(`update objects set name = 'nope' where id = $1`, [task]))).affectedRows).toBe(0);
+    expect((await as('eldest', () => db.query(`update objects set name = 'Library book' where id = $1`, [task]))).affectedRows).toBe(1);
+  });
+
+  it('handing out stays limited to chores and tasks', async () => {
+    expect((await as('junior', () => db.query(`update objects set name = 'mine now' where id = $1`, [car]))).affectedRows).toBe(0);
+  });
+});
+
+describe('turns', () => {
+  let dishes: string, marleys: string, lucys: string, eggs: string;
+  beforeAll(async () => {
+    dishes = await as('sam', () => addObject({ name: 'Dishes', type: 'Chore or task', owner: id.sam }));
+    eggs = await as('sam', () => addObject({ name: 'Eggs', type: 'Chore or task', owner: id.sam }));
+    const rule = (who: string, days: string) => as('sam', () => rows(
+      `insert into rules (object_id, name, kind, event_kind, weekdays, owner_id) values ($1, 'Done', 'weekly', 'Done', $2::smallint[], $3) returning id`,
+      [dishes, days, who]));
+    marleys = (await rule(id.second, '{2,7}'))[0].id as string;
+    lucys = (await rule(id.junior, '{1,4}'))[0].id as string;
+  });
+
+  it('an entry can say whose turn it was, and a fix keeps it', async () => {
+    const [e] = await as('eldest', () => rows(
+      `insert into events (object_id, kind, occurred_on, created_by, rule_id) values ($1, 'Done', '2026-10-20', $2, $3) returning id, rule_id`,
+      [dishes, id.eldest, marleys]));
+    expect(e.rule_id).toBe(marleys);
+    const [fix] = await as('eldest', () => rows(
+      `insert into events (object_id, kind, occurred_on, created_by, correction_of) values ($1, 'Done', '2026-10-21', $2, $3) returning rule_id`,
+      [dishes, id.eldest, e.id]));
+    expect(fix.rule_id).toBe(marleys);
+    expect((await as('sam', () => rows('select rule_id from effective_events where object_id = $1', [dishes])))[0].rule_id).toBe(marleys);
+  });
+
+  it('an entry cannot name a turn on a different item', async () => {
+    await expect(as('eldest', () => db.query(
+      `insert into events (object_id, kind, occurred_on, created_by, rule_id) values ($1, 'Done', '2026-10-20', $2, $3)`,
+      [eggs, id.eldest, lucys]))).rejects.toThrow(/different item/);
+  });
+});
+
+describe('activities and work', () => {
+  let scouts: string, slot: string;
+  beforeAll(async () => {
+    scouts = await as('junior', () => addObject({ name: 'Scouts', type: 'Activity or work', owner: id.junior, fields: { place: 'Scout hut' } }));
+  });
+
+  it('the person adds their own times; parents can too; others cannot', async () => {
+    const add = (who: keyof typeof authId) => as(who, () => rows(
+      `insert into activity_slots (object_id, weekdays, starts_at, ends_at, drop_off_by, pick_up_by)
+       values ($1, '{4}', '17:00', '19:00', $2, $3) returning id, created_by`, [scouts, id.crystal, id.sam]));
+    const [mine] = await add('junior');
+    slot = mine.id as string;
+    expect(mine.created_by).toBe(id.junior);
+    await expect(add('crystal')).resolves.toHaveLength(1);
+    await expect(add('eldest')).rejects.toThrow(/row-level security/);
+    expect((await as('eldest', () => rows('select id from activity_slots where object_id = $1', [scouts]))).length).toBe(2);
+  });
+
+  it('one date can change who drives, only on one of its days, and go back to the usual', async () => {
+    await as('sam', () => db.query(
+      `insert into activity_changes (slot_id, on_date, drop_off_by, pick_up_by) values ($1, '2026-10-22', $2, $2)`, [slot, id.sam]));
+    const [c] = await as('junior', () => rows('select changed_by, drop_off_by from activity_changes where slot_id = $1', [slot]));
+    expect(c).toEqual({ changed_by: id.sam, drop_off_by: id.sam });
+    await expect(as('sam', () => db.query(
+      `insert into activity_changes (slot_id, on_date) values ($1, '2026-10-23')`, [slot]))).rejects.toThrow(/one of its days/);
+    await expect(as('eldest', () => db.query(
+      `insert into activity_changes (slot_id, on_date, cancelled) values ($1, '2026-10-29', true)`, [slot]))).rejects.toThrow(/row-level security/);
+    expect((await as('junior', () => db.query(`delete from activity_changes where slot_id = $1`, [slot]))).affectedRows).toBe(1);
+  });
+
+  it('strangers see nothing', async () => {
+    expect(await as('stranger', () => rows('select * from activity_slots'), 'stranger@example.com')).toEqual([]);
   });
 });

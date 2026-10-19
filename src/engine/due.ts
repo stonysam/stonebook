@@ -239,7 +239,9 @@ function computeFixedDate(rule: Rule, effective: EventRecord[], today: string): 
   const period = rule.renewEveryMonths ?? null;
 
   if (!period) {
-    const done = matches.find((e) => e.data?.covers === anchor || e.occurredOn >= addDays(anchor, -window));
+    // A one-off task counts as done by anything logged since it was set (startsOn), however early.
+    const done = matches.find((e) => e.data?.covers === anchor || e.occurredOn >= addDays(anchor, -window)
+      || (resetIdx < 0 && !!rule.startsOn && e.occurredOn >= rule.startsOn));
     if (done) {
       return result(rule, 'done', null, today,
         `Due ${anchor}; done on ${done.occurredOn}. Log a new due date to keep tracking.`);

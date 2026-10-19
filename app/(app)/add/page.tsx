@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/link';
 import { AddForm } from '@/components/add-form';
 import { loadWorld } from '@/lib/world';
 
@@ -25,12 +25,12 @@ export default async function Add({ searchParams }: { searchParams: Promise<{ ty
             </Link>
           ))}
         </div>
-        {w.me.role !== 'parent' && <p className="small" style={{ margin: 0 }}>You can add things for yourself, like homework or school dates.</p>}
+        {w.me.role !== 'parent' && <p className="small" style={{ margin: 0 }}>You can add things for yourself, like homework or school dates, and give anyone a chore or task.</p>}
       </main>
     );
   }
 
-  const owners = w.me.role === 'parent' ? w.members : w.members.filter((m) => m.id === w.me.id);
+  const owners = w.me.role === 'parent' || type.assignable ? w.members : w.members.filter((m) => m.id === w.me.id);
   return (
     <main className="page">
       <Link href="/add" className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>Back</Link>
@@ -42,6 +42,8 @@ export default async function Add({ searchParams }: { searchParams: Promise<{ ty
         members={w.members}
         owners={owners}
         meId={w.me.id}
+        isParent={w.me.role === 'parent'}
+        today={w.today}
         initialOwner={owners.some((m) => m.id === owner) ? owner! : w.me.id}
       />
     </main>

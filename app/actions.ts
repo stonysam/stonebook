@@ -8,6 +8,7 @@ import { redirect } from 'next/navigation';
 import { getMe } from '@/lib/auth';
 import { addDays, parseDate, todayIn } from '@/src/engine/dates';
 import type { Json, RuleKindDb, Visibility } from '@/lib/database.types';
+import { isActivity, isChore } from '@/lib/types';
 
 export type ActionResult = { ok: true; waiting?: boolean; message?: string } | { ok: false; error: string };
 
@@ -21,6 +22,7 @@ const done = (): void => revalidatePath('/', 'layout');
 // ---------------------------------------------------------------------------
 export async function logEvent(input: {
   objectId: string; kind: string; occurredOn: string; meterValue?: number | null; meterUnit?: string | null; note?: string;
+  ruleId?: string | null;
 }): Promise<ActionResult> {
   const { supabase, me } = await getMe();
   const kind = input.kind.trim().slice(0, 80);
@@ -34,7 +36,7 @@ export async function logEvent(input: {
   const { data, error } = await supabase.from('events').insert({
     id, root_id: id, object_id: input.objectId, kind, occurred_on: input.occurredOn,
     meter_value: meter, meter_unit: meter != null ? (input.meterUnit ?? null) : null,
-    note: input.note?.trim().slice(0, 500) || null, created_by: me.id,
+    note: input.note?.trim().slice(0, 500) || null, created_by: me.id, rule_id: input.ruleId || null,
   }).select('needs_confirmation').single();
   if (error) return fail('Couldn’t save that. Try again.');
   done();
@@ -116,52 +118,81 @@ async function fieldKeys(typeId: string) {
   return data ?? [];
 }
 
-function ruleFromForm(form: FormData, objectId: string, ownerId: string, isChore: boolean): { row?: Record<string, unknown>; error?: string } {
+type RuleInsert = Record<string, unknown>;
+
+/**
+ * The reminders a form describes. Usually one; a chore on set days where different people
+ * take different days (dishes: Marley Tue and Sun, Lucy Mon and Thu) makes one per person.
+ * `responsible` is who gets reminded, defaulting to whoever looks after the item.
+ */
+function rulesFromForm(form: FormData, objectId: string, defaultOwner: string, chore: boolean): { rows: RuleInsert[]; error?: string } {
   const how = clean(form.get('how'), 20);
-  const what = clean(form.get('what'), 80) || (isChore ? 'Done' : '');
+  const what = clean(form.get('what'), 80) || (chore ? 'Done' : '');
+  const owner = clean(form.get('responsible'), 40) || defaultOwner;
   const num = (name: string) => { const n = Number(clean(form.get(name), 12)); return Number.isFinite(n) && n > 0 ? Math.round(n) : null; };
-  const base = { object_id: objectId, owner_id: ownerId, name: what || 'Reminder', event_kind: what || null };
+  const base = { object_id: objectId, owner_id: owner, name: what || 'Reminder', event_kind: what || null };
+  const one = (row: RuleInsert) => ({ rows: [row] });
   switch (how) {
     case '':
     case 'none':
-      return {};
+      return { rows: [] };
     case 'record':
-      return { row: { ...base, kind: 'record' as RuleKindDb, event_kind: null, name: 'History only' } };
+      return one({ ...base, kind: 'record' as RuleKindDb, event_kind: null, name: 'History only' });
     case 'daily':
-      return { row: { ...base, kind: 'interval', every_days: 1, lead_days: [1], starts_on: todayIn() } };
+      return one({ ...base, kind: 'interval', every_days: 1, lead_days: [1], starts_on: todayIn() });
     case 'weekly': {
-      const days = form.getAll('days').map(Number).filter((d) => d >= 1 && d <= 7);
-      if (days.length === 0) return { error: 'Pick at least one day.' };
-      return { row: { ...base, kind: 'weekly', weekdays: [...new Set(days)].sort() } };
+      const days = [...new Set(form.getAll('days').map(Number).filter((d) => d >= 1 && d <= 7))].sort();
+      if (days.length === 0) return { rows: [], error: 'Pick at least one day.' };
+      const byOwner = new Map<string, number[]>();
+      for (const d of days) {
+        const who = clean(form.get(`day_owner_${d}`), 40) || owner;
+        byOwner.set(who, [...(byOwner.get(who) ?? []), d]);
+      }
+      return { rows: [...byOwner].map(([who, ds]) => ({ ...base, owner_id: who, kind: 'weekly', weekdays: ds })) };
     }
     case 'interval': {
       const n = num('every_n');
       const unit = clean(form.get('every_unit'), 10);
-      if (!n) return { error: 'Say how often.' };
-      if (!what) return { error: 'Say what gets done, e.g. "Filter changed".' };
+      if (!n) return { rows: [], error: 'Say how often.' };
+      if (!what) return { rows: [], error: 'Say what gets done, e.g. "Filter changed".' };
       const start = clean(form.get('last_done'), 10);
-      return { row: { ...base, kind: 'interval', every_months: unit === 'months' ? n : null, every_days: unit === 'weeks' ? n * 7 : unit === 'days' ? n : null,
-        starts_on: isIsoDate(start) ? start : null, lead_days: isChore ? [1] : [14, 1] } };
+      return one({ ...base, kind: 'interval', every_months: unit === 'months' ? n : null, every_days: unit === 'weeks' ? n * 7 : unit === 'days' ? n : null,
+        starts_on: isIsoDate(start) ? start : chore ? todayIn() : null, lead_days: chore ? [1] : [14, 1] });
     }
     case 'meter': {
       const n = num('meter_every');
       const unit = clean(form.get('meter_unit'), 10) || 'km';
-      if (!n) return { error: 'Say every how many km or hours.' };
-      if (!what) return { error: 'Say what gets done, e.g. "Service".' };
+      if (!n) return { rows: [], error: 'Say every how many km or hours.' };
+      if (!what) return { rows: [], error: 'Say what gets done, e.g. "Service".' };
       const months = num('meter_months');
       const startReading = Number(clean(form.get('meter_start'), 12));
-      return { row: { ...base, kind: 'interval', meter_every: n, meter_unit: unit, every_months: months,
-        meter_start: Number.isFinite(startReading) && startReading > 0 ? startReading : null } };
+      return one({ ...base, kind: 'interval', meter_every: n, meter_unit: unit, every_months: months,
+        meter_start: Number.isFinite(startReading) && startReading > 0 ? startReading : null });
     }
     case 'date': {
       const due = clean(form.get('due_on'), 10);
-      if (!isIsoDate(due)) return { error: 'Pick the date.' };
-      const repeat = num('renew_months');
-      return { row: { ...base, kind: 'fixed_date', event_kind: what || 'Done', name: what || 'Due', due_on: due, renew_every_months: repeat } };
+      if (!isIsoDate(due)) return { rows: [], error: 'Pick the date.' };
+      const repeat = chore ? null : num('renew_months');
+      return one({ ...base, kind: 'fixed_date', event_kind: what || 'Done', name: what || (chore ? 'Do it' : 'Due'), due_on: due,
+        renew_every_months: repeat, ...(chore ? { starts_on: todayIn(), lead_days: [1] } : {}) });
     }
     default:
-      return { error: 'Unknown schedule.' };
+      return { rows: [], error: 'Unknown schedule.' };
   }
+}
+
+/** Weekly times for an activity or work, from the form (days, starts_at, ends_at, drop_off_by, pick_up_by). */
+function slotFromForm(form: FormData, objectId: string): { row?: Record<string, unknown>; error?: string } {
+  const days = [...new Set(form.getAll('slot_days').map(Number).filter((d) => d >= 1 && d <= 7))].sort();
+  const starts = clean(form.get('starts_at'), 5);
+  const ends = clean(form.get('ends_at'), 5);
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/;
+  if (days.length === 0 && !starts) return {};
+  if (days.length === 0) return { error: 'Pick the day or days.' };
+  if (!time.test(starts)) return { error: 'Say what time it starts.' };
+  if (ends && (!time.test(ends) || ends <= starts)) return { error: 'The end time should be after the start.' };
+  return { row: { object_id: objectId, weekdays: days, starts_at: starts, ends_at: ends || null,
+    drop_off_by: clean(form.get('drop_off_by'), 40) || null, pick_up_by: clean(form.get('pick_up_by'), 40) || null } };
 }
 
 export async function createItem(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
@@ -172,14 +203,19 @@ export async function createItem(_prev: ActionResult | null, form: FormData): Pr
   const visibility = (clean(form.get('visibility'), 10) || 'shared') as Visibility;
   if (!name) return fail('Give it a name.');
   if (!['shared', 'personal', 'private'].includes(visibility)) return fail('Pick who can see it.');
-  if (me.role !== 'parent' && ownerId !== me.id) return fail('You can add things for yourself.');
+  const { data: type } = await supabase.from('object_types').select('name, assignable').eq('id', typeId).single();
+  if (!type) return fail('Pick what kind of thing it is.');
+  if (me.role !== 'parent' && ownerId !== me.id) {
+    if (!type.assignable) return fail('You can add things for yourself.');
+    if (visibility !== 'shared') return fail('A chore or task you give someone else is shared with the family.');
+  }
   if (visibility === 'private' && ownerId !== me.id) return fail('Only the owner can make something private.');
 
-  const { data: type } = await supabase.from('object_types').select('name').eq('id', typeId).single();
-  const isChore = type?.name === 'Chore';
   const objectId = crypto.randomUUID();
-  const ruleCheck = ruleFromForm(form, objectId, ownerId, isChore);
+  const ruleCheck = isActivity(type.name) ? { rows: [] } : rulesFromForm(form, objectId, ownerId, isChore(type.name));
   if (ruleCheck.error) return fail(ruleCheck.error);
+  const slotCheck = isActivity(type.name) ? slotFromForm(form, objectId) : {};
+  if (slotCheck.error) return fail(slotCheck.error);
 
   const { error } = await supabase.from('objects').insert({
     id: objectId, object_type_id: typeId, name, owner_id: ownerId, visibility,
@@ -187,9 +223,13 @@ export async function createItem(_prev: ActionResult | null, form: FormData): Pr
     field_values: fieldValues(form, await fieldKeys(typeId)),
   });
   if (error) return fail(error.message.includes('required') || error.message.includes('must') ? error.message : 'Couldn’t save. Check the details.');
-  if (ruleCheck.row) {
-    const { error: ruleError } = await supabase.from('rules').insert(ruleCheck.row as never);
+  if (ruleCheck.rows.length) {
+    const { error: ruleError } = await supabase.from('rules').insert(ruleCheck.rows as never);
     if (ruleError) return fail('Saved, but the reminder didn’t save. Add it from the item page.');
+  }
+  if (slotCheck.row) {
+    const { error: slotError } = await supabase.from('activity_slots').insert(slotCheck.row as never);
+    if (slotError) return fail('Saved, but the times didn’t save. Add them from the item page.');
   }
   done();
   redirect(`/things/${objectId}?added=1`);
@@ -230,13 +270,13 @@ export async function addRule(_prev: ActionResult | null, form: FormData): Promi
   const { data: obj } = await supabase.from('objects').select('owner_id, object_type_id').eq('id', objectId).single();
   if (!obj) return fail('Not found.');
   const { data: type } = await supabase.from('object_types').select('name').eq('id', obj.object_type_id).single();
-  const rule = ruleFromForm(form, objectId, obj.owner_id, type?.name === 'Chore');
+  const rule = rulesFromForm(form, objectId, obj.owner_id, isChore(type?.name));
   if (rule.error) return fail(rule.error);
-  if (!rule.row) return fail('Pick how often.');
-  const { error } = await supabase.from('rules').insert(rule.row as never);
+  if (!rule.rows.length) return fail('Pick how often.');
+  const { error } = await supabase.from('rules').insert(rule.rows as never);
   if (error) return fail('You can’t add reminders to this one.');
   done();
-  return { ok: true, message: 'Reminder added.' };
+  return { ok: true, message: rule.rows.length > 1 ? `${rule.rows.length} reminders added, one per person.` : 'Reminder added.' };
 }
 
 export async function stopRule(ruleId: string): Promise<ActionResult> {
@@ -245,4 +285,44 @@ export async function stopRule(ruleId: string): Promise<ActionResult> {
   if (error || count === 0) return fail('You can’t change this one.');
   done();
   return { ok: true, message: 'Reminder stopped. Past history stays.' };
+}
+
+// ---------------------------------------------------------------------------
+// Activities and work
+// ---------------------------------------------------------------------------
+export async function addSlot(_prev: ActionResult | null, form: FormData): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  const objectId = clean(form.get('object_id'), 40);
+  const slot = slotFromForm(form, objectId);
+  if (slot.error) return fail(slot.error);
+  if (!slot.row) return fail('Pick the day and time.');
+  const { error } = await supabase.from('activity_slots').insert(slot.row as never);
+  if (error) return fail('Only the person it belongs to, or Mum or Dad, can change this.');
+  done();
+  return { ok: true, message: 'Times added.' };
+}
+
+export async function stopSlot(slotId: string): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  const { error, count } = await supabase.from('activity_slots').update({ active: false }, { count: 'exact' }).eq('id', slotId);
+  if (error || count === 0) return fail('You can’t change this one.');
+  done();
+  return { ok: true, message: 'Removed. It no longer shows on Today.' };
+}
+
+/** Change one date: someone else drives, or it's off. `reset` goes back to the usual. */
+export async function changeSession(input: {
+  slotId: string; date: string; cancelled: boolean; dropOffBy: string | null; pickUpBy: string | null; note?: string; reset?: boolean;
+}): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  if (!isIsoDate(input.date)) return fail('Pick a date.');
+  const { error } = input.reset
+    ? await supabase.from('activity_changes').delete().match({ slot_id: input.slotId, on_date: input.date })
+    : await supabase.from('activity_changes').upsert({
+        slot_id: input.slotId, on_date: input.date, cancelled: input.cancelled,
+        drop_off_by: input.dropOffBy || null, pick_up_by: input.pickUpBy || null, note: input.note?.trim().slice(0, 300) || null,
+      });
+  if (error) return fail('Only the person it belongs to, or Mum or Dad, can change this.');
+  done();
+  return { ok: true, message: input.reset ? 'Back to the usual.' : input.cancelled ? 'Marked as off that day.' : 'Changed for that day.' };
 }

@@ -50,3 +50,10 @@ export const WEEKDAYS = [
   [1, 'Mo', 'Monday'], [2, 'Tu', 'Tuesday'], [3, 'We', 'Wednesday'], [4, 'Th', 'Thursday'],
   [5, 'Fr', 'Friday'], [6, 'Sa', 'Saturday'], [7, 'Su', 'Sunday'],
 ] as const;
+
+/** "Today", "Tomorrow", "Thu 23 Oct" */
+export function dayLabel(iso: string, today: string): string {
+  if (iso === today) return 'Today';
+  if (iso === addDays(today, 1)) return 'Tomorrow';
+  return weekdayDayMonth.format(asDate(iso)).replace(',', '');
+}

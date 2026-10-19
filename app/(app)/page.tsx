@@ -1,7 +1,13 @@
-import Link from 'next/link';
+import Link from '@/components/link';
 import { LogButton } from '@/components/log-button';
+import { SessionCard } from '@/components/session-card';
 import { possessive, todayHeading, whenText } from '@/lib/format';
-import { allDue, loadWorld, memberName, meterUnitFor, suggestedKinds, type DueRow } from '@/lib/world';
+import { isChore } from '@/lib/types';
+import {
+  allDue, canEditActivity, driverOptions, loadWorld, memberName, meterUnitFor, recentThings, sessionView, sessionsOn,
+  suggestedKinds, turnsOf, typeOf, type DueRow,
+} from '@/lib/world';
+import { addDays } from '@/src/engine/dates';
 
 export const metadata = { title: 'Today · Stonebook' };
 
@@ -22,10 +28,14 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
 
   const rows = allDue(w)
     .filter((d) => d.bucket !== 'none' && d.bucket !== 'later')
-    .filter((d) => view === 'family' || d.rule.owner_id === me.id || d.object.owner_id === me.id)
+    .filter((d) => view === 'family' || d.rule.owner_id === me.id)
     .sort((a, b) => (a.due.dueOn ?? '9999').localeCompare(b.due.dueOn ?? '9999'));
   const waitingObjects = new Set(w.pending.filter((p) => p.created_by === me.id).map((p) => p.object_id));
   const myPendingApprovals = me.role === 'parent' ? w.pending.length : 0;
+  const recent = recentThings(w);
+  const plans = [w.today, addDays(w.today, 1)].flatMap((d) => sessionsOn(w, d))
+    .filter((s) => view === 'family' || s.object.owner_id === me.id || s.dropOffBy === me.id || s.pickUpBy === me.id);
+  const { drivers, names } = driverOptions(w);
 
   return (
     <main className="page">
@@ -41,12 +51,31 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         </div>
       )}
 
+      {recent.length > 0 && (
+        <nav className="scroll-x" aria-label="Recent things">
+          {recent.map((o) => (
+            <Link key={o.id} href={`/things/${o.id}`} className="chip" style={{ gap: 6 }}>
+              {o.name}<span className="small" style={{ fontSize: 12 }}>{typeOf(w, o)?.name.split(' ')[0]}</span>
+            </Link>
+          ))}
+        </nav>
+      )}
+
       {myPendingApprovals > 0 && (
         <Link href="/approvals" className="card row dashed" style={{ textDecoration: 'none', color: 'inherit', minHeight: 56 }}>
           <span>{myPendingApprovals === 1 ? '1 chore is waiting for your OK' : `${myPendingApprovals} chores are waiting for your OK`}</span>
           <span className="spacer" />
           <strong style={{ color: 'var(--green)' }}>Review</strong>
         </Link>
+      )}
+
+      {plans.length > 0 && (
+        <section className="stack" aria-label="Plans">
+          <h2 className="eyebrow">Today and tomorrow</h2>
+          {plans.map((p) => (
+            <SessionCard key={`${p.slot.id}-${p.date}`} s={sessionView(w, p)} drivers={drivers} names={names} canChange={canEditActivity(w, p.object)} />
+          ))}
+        </section>
       )}
 
       {SECTIONS.map(([bucket, title]) => {
@@ -57,7 +86,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
             <h2 className="eyebrow">{title}</h2>
             {list.map((d) => {
               const waiting = waitingObjects.has(d.object.id);
-              const owner = d.object.owner_id === me.id ? 'yours' : possessive(memberName(w, d.object.owner_id));
+              const forWhom = d.rule.owner_id === me.id ? 'yours' : possessive(memberName(w, d.rule.owner_id));
               return (
                 <div key={d.rule.id} className="card row" style={{ padding: '12px 12px 12px 16px' }}>
                   <Link href={`/things/${d.object.id}`} className="card-link" style={{ flex: '1 1 auto', minWidth: 0 }}>
@@ -68,16 +97,17 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                         {d.bucket === 'setup' ? 'not started' : whenText(d.due.dueOn, w.today)}
                       </span>
                     </span>
-                    <span className="small">{d.typeName} · {owner}</span>
+                    <span className="small">{d.typeName} · {forWhom}</span>
                   </Link>
                   {waiting ? (
                     <span className="badge badge-wait" style={{ maxWidth: 120, textAlign: 'center' }}>Waiting for Mum or Dad</span>
                   ) : me.role !== 'child' ? (
                     <LogButton
-                      target={{ objectId: d.object.id, objectName: d.object.name, kinds: suggestedKinds(w, d.object.id), meterUnit: meterUnitFor(w, d.object.id) }}
+                      target={{ objectId: d.object.id, objectName: d.object.name, kinds: suggestedKinds(w, d.object.id), meterUnit: meterUnitFor(w, d.object.id),
+                        ruleId: d.rule.id, turns: turnsOf(w, d.object.id), meId: me.id }}
                       today={w.today}
                       kidName={kid ? me.display_name : null}
-                      label={d.typeName === 'Chore' ? 'Done' : 'Log'}
+                      label={isChore(d.typeName) ? 'Done' : 'Log'}
                       style={{ flexShrink: 0, minWidth: 72 }}
                     />
                   ) : null}
@@ -88,7 +118,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         );
       })}
 
-      {rows.length === 0 && (
+      {rows.length === 0 && plans.length === 0 && (
         <div className="card dashed" style={{ textAlign: 'center', padding: 32 }}>
           <p style={{ margin: 0 }}>Nothing due{view === 'mine' ? ' for you' : ''}. Enjoy the day.</p>
           <p className="small" style={{ margin: '8px 0 0' }}>Add things and reminders from the Add tab.</p>

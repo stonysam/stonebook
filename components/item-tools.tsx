@@ -1,7 +1,9 @@
 'use client';
 
 import { useActionState, useEffect, useState, useTransition } from 'react';
-import { addRule, correctEvent, setArchived, stopRule, updateDetails, type ActionResult } from '@/app/actions';
+import { addRule, addSlot, correctEvent, setArchived, stopRule, stopSlot, updateDetails, type ActionResult } from '@/app/actions';
+import { isActivity } from '@/lib/types';
+import { ActivityFields } from './activity-fields';
 import type { FieldDefRow, MemberRow, Visibility } from '@/lib/database.types';
 import { ScheduleFields } from './schedule-fields';
 import { useToast } from './toast';
@@ -80,10 +82,12 @@ function useResultToast(state: ActionResult | null, onOk?: () => void) {
 export function ItemActions(props: {
   objectId: string; name: string; typeName: string; archived: boolean; visibility: Visibility; shareWithFamily: boolean;
   canPrivate: boolean; defs: FieldDefRow[]; values: Record<string, unknown>; members: MemberRow[];
+  ownerId: string; meId: string; today: string; canRemind: boolean;
 }) {
+  const activity = isActivity(props.typeName);
   const [mode, setMode] = useState<'none' | 'edit' | 'reminder'>('none');
   const [editState, editAction, editing] = useActionState(updateDetails, null);
-  const [ruleState, ruleAction, addingRule] = useActionState(addRule, null);
+  const [ruleState, ruleAction, addingRule] = useActionState(activity ? addSlot : addRule, null);
   const [busy, start] = useTransition();
   const editToast = useResultToast(editState, () => setMode('none'));
   const ruleToast = useResultToast(ruleState, () => setMode('none'));
@@ -95,9 +99,9 @@ export function ItemActions(props: {
         <button type="button" className="btn" style={{ flex: '1 1 0' }} aria-expanded={mode === 'edit'} onClick={() => setMode(mode === 'edit' ? 'none' : 'edit')}>
           {mode === 'edit' ? 'Cancel' : 'Edit details'}
         </button>
-        <button type="button" className="btn" style={{ flex: '1 1 0' }} aria-expanded={mode === 'reminder'} onClick={() => setMode(mode === 'reminder' ? 'none' : 'reminder')}>
-          {mode === 'reminder' ? 'Cancel' : 'Add reminder'}
-        </button>
+        {props.canRemind && <button type="button" className="btn" style={{ flex: '1 1 0' }} aria-expanded={mode === 'reminder'} onClick={() => setMode(mode === 'reminder' ? 'none' : 'reminder')}>
+          {mode === 'reminder' ? 'Cancel' : activity ? 'Add times' : 'Add reminder'}
+        </button>}
         <button type="button" className="btn" style={{ flex: '1 1 0' }} disabled={busy} onClick={() => start(async () => {
           const r = await setArchived(props.objectId, !props.archived);
           toast.show(r.ok ? (r.message ?? '') : r.error);
@@ -120,13 +124,33 @@ export function ItemActions(props: {
       {mode === 'reminder' && (
         <form action={ruleAction} className="card stack" style={{ gap: 14, border: '2px solid var(--text)' }}>
           <input type="hidden" name="object_id" value={props.objectId} />
-          <ScheduleFields typeName={props.typeName} allowNone={false} />
+          {activity
+            ? <ActivityFields members={props.members} meId={props.meId} />
+            : <ScheduleFields typeName={props.typeName} members={props.members} owner={props.ownerId} meId={props.meId} today={props.today} />}
           {ruleState && !ruleState.ok && <p role="alert" style={{ margin: 0, fontWeight: 600 }}>{ruleState.error}</p>}
-          <button className="btn btn-primary" disabled={addingRule}>{addingRule ? 'Saving…' : 'Add reminder'}</button>
+          <button className="btn btn-primary" disabled={addingRule}>{addingRule ? 'Saving…' : activity ? 'Add times' : 'Add reminder'}</button>
         </form>
       )}
       {editToast.node}{ruleToast.node}{toast.node}
     </div>
+  );
+}
+
+export function StopSlotButton({ slotId }: { slotId: string }) {
+  const [busy, start] = useTransition();
+  const [asked, setAsked] = useState(false);
+  const toast = useToast();
+  return (
+    <>
+      <button type="button" className="btn btn-text" style={{ minHeight: 36, alignSelf: 'flex-start' }} disabled={busy}
+        onClick={() => {
+          if (!asked) { setAsked(true); return; }
+          start(async () => { const r = await stopSlot(slotId); toast.show(r.ok ? (r.message ?? '') : r.error); });
+        }}>
+        {asked ? 'Tap again to remove these times' : 'Remove these times'}
+      </button>
+      {toast.node}
+    </>
   );
 }
 

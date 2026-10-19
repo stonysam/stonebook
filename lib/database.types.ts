@@ -11,7 +11,7 @@ type Table<Row, Insert, Update = Partial<Insert>> = { Row: Row; Insert: Insert; 
 type View<Row> = { Row: Row; Relationships: [] };
 
 export type MemberRow = { id: string; display_name: string; role: MemberRole; email: string | null; auth_user_id: string | null; created_at: string };
-export type ObjectTypeRow = { id: string; name: string; icon: string | null; sort_order: number; confirm_kid_logs: boolean; created_at: string };
+export type ObjectTypeRow = { id: string; name: string; icon: string | null; sort_order: number; confirm_kid_logs: boolean; assignable: boolean; created_at: string };
 export type FieldDefRow = { id: string; object_type_id: string; key: string; label: string; kind: FieldKind; options: Json | null; required: boolean; sort_order: number };
 export type ObjectRow = {
   id: string; object_type_id: string; name: string; owner_id: string; visibility: Visibility; share_with_family: boolean;
@@ -20,13 +20,21 @@ export type ObjectRow = {
 export type EventRow = {
   id: string; object_id: string; kind: string; occurred_on: string; meter_value: number | null; meter_unit: string | null;
   data: Json; note: string | null; correction_of: string | null; voided: boolean; created_by: string | null; created_at: string;
-  needs_confirmation: boolean; root_id: string;
+  needs_confirmation: boolean; root_id: string; rule_id: string | null;
 };
 export type RuleRow = {
   id: string; object_id: string; name: string; kind: RuleKindDb; event_kind: string | null; every_months: number | null;
   every_days: number | null; meter_every: number | null; meter_unit: string | null; due_on: string | null;
   renew_every_months: number | null; starts_on: string | null; meter_start: number | null; weekdays: number[] | null;
   owner_id: string; lead_days: number[]; overdue_repeat_days: number; active: boolean; created_by: string | null; created_at: string;
+};
+export type ActivitySlotRow = {
+  id: string; object_id: string; weekdays: number[]; starts_at: string; ends_at: string | null;
+  drop_off_by: string | null; pick_up_by: string | null; active: boolean; created_by: string | null; created_at: string;
+};
+export type ActivityChangeRow = {
+  slot_id: string; on_date: string; cancelled: boolean; drop_off_by: string | null; pick_up_by: string | null;
+  note: string | null; changed_by: string | null; changed_at: string;
 };
 export type ConfirmationRow = { event_id: string; approved: boolean; decided_by: string; decided_at: string; note: string | null };
 export type ReactionRow = { event_id: string; member_id: string; emoji: string; created_at: string };
@@ -46,11 +54,13 @@ export type Database = {
   public: {
     Tables: {
       members: Table<MemberRow, Opt<MemberRow, 'id' | 'email' | 'auth_user_id' | 'created_at'>>;
-      object_types: Table<ObjectTypeRow, Opt<ObjectTypeRow, 'id' | 'icon' | 'sort_order' | 'confirm_kid_logs' | 'created_at'>>;
+      object_types: Table<ObjectTypeRow, Opt<ObjectTypeRow, 'id' | 'icon' | 'sort_order' | 'confirm_kid_logs' | 'assignable' | 'created_at'>>;
       field_defs: Table<FieldDefRow, Opt<FieldDefRow, 'id' | 'options' | 'required' | 'sort_order'>>;
       objects: Table<ObjectRow, Opt<ObjectRow, 'id' | 'visibility' | 'share_with_family' | 'field_values' | 'archived_at' | 'created_by' | 'created_at'>>;
-      events: Table<EventRow, Opt<EventRow, 'id' | 'meter_value' | 'meter_unit' | 'data' | 'note' | 'correction_of' | 'voided' | 'created_at' | 'needs_confirmation'>>;
+      events: Table<EventRow, Opt<EventRow, 'id' | 'meter_value' | 'meter_unit' | 'data' | 'note' | 'correction_of' | 'voided' | 'created_at' | 'needs_confirmation' | 'rule_id'>>;
       rules: Table<RuleRow, Opt<RuleRow, 'id' | 'event_kind' | 'every_months' | 'every_days' | 'meter_every' | 'meter_unit' | 'due_on' | 'renew_every_months' | 'starts_on' | 'meter_start' | 'weekdays' | 'lead_days' | 'overdue_repeat_days' | 'active' | 'created_by' | 'created_at'>>;
+      activity_slots: Table<ActivitySlotRow, Opt<ActivitySlotRow, 'id' | 'ends_at' | 'drop_off_by' | 'pick_up_by' | 'active' | 'created_by' | 'created_at'>>;
+      activity_changes: Table<ActivityChangeRow, Opt<ActivityChangeRow, 'cancelled' | 'drop_off_by' | 'pick_up_by' | 'note' | 'changed_by' | 'changed_at'>>;
       confirmations: Table<ConfirmationRow, Opt<ConfirmationRow, 'decided_at' | 'note'>>;
       reactions: Table<ReactionRow, Opt<ReactionRow, 'created_at'>>;
       feed_seen: Table<FeedSeenRow, Opt<FeedSeenRow, 'seen_at'>>;

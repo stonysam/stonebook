@@ -119,3 +119,31 @@ textarea { padding: 12px 14px; min-height: 88px; }
 .split { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
 .split > .main { flex: 2 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 .split > .side { flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+/* Tap feedback: everything tappable reacts the moment it's touched */
+.btn, .chip, .day, .card-link, a.card, .list-item, .seg > *, .nav a {
+  transition: transform 80ms ease, background-color 120ms ease, opacity 120ms ease;
+  -webkit-user-select: none; user-select: none;
+}
+.btn:active:not(:disabled), .chip:active:not(:disabled), .day:active, a.card:active, .seg > *:active { transform: scale(0.96); }
+.btn:active:not(:disabled):not(.btn-primary):not(.btn-text), .chip:active:not([aria-pressed='true']), .day:active:not([aria-pressed='true']),
+a.card:active, .card-link:active, .list-item:active { background-color: var(--surface-2); }
+.nav a:active { color: var(--text); }
+
+/* A link whose page is loading: dimmed, with a small spinner */
+a:has(> .link-pending.on) { opacity: 0.6; }
+a:not(.nav a):has(> .link-pending.on) { background-color: var(--surface-2); }
+.link-pending { display: none; }
+.link-pending.on {
+  display: inline-block; flex: 0 0 auto; width: 16px; height: 16px; margin-left: 8px; vertical-align: middle;
+  border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+.nav .link-pending.on { position: absolute; top: 6px; right: calc(50% - 22px); width: 12px; height: 12px; margin: 0; }
+.card-link > .link-pending.on, a.card > .link-pending.on { position: absolute; right: 14px; top: 14px; }
+.card-link, a.card { position: relative; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .btn, .chip, .day, a.card, .seg > * { transition: none; }
+  .btn:active, .chip:active, .day:active, a.card:active, .seg > *:active { transform: none; }
+  .link-pending.on { animation-duration: 2s; }
+}

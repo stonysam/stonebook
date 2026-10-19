@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/auth', () => ({ getMe: vi.fn() }));
 vi.mock('react', async (orig) => ({ ...(await orig<typeof import('react')>()), cache: <T,>(fn: T) => fn }));
 
-const { dueFor, suggestedKinds, toEngineRule, canEditObject } = await import('../lib/world');
+const { dueFor, suggestedKinds, toEngineRule, canEditObject, recentThings, sessionsOn, choresOf } = await import('../lib/world');
 const { whenText } = await import('../lib/format');
 import type { EventRow, MemberRow, ObjectRow, RuleRow } from '../lib/database.types';
 import type { World } from '../lib/world';
@@ -22,13 +22,13 @@ const rule = (id: string, objectId: string, extra: Partial<RuleRow>): RuleRow =>
 });
 const event = (id: string, objectId: string, kind: string, on: string): EventRow => ({
   id, object_id: objectId, kind, occurred_on: on, meter_value: null, meter_unit: null, data: {}, note: null,
-  correction_of: null, voided: false, created_by: 'sam', created_at: on + 'T10:00:00Z', needs_confirmation: false, root_id: id,
+  correction_of: null, voided: false, created_by: 'sam', created_at: on + 'T10:00:00Z', needs_confirmation: false, root_id: id, rule_id: null,
 });
 
 function world(rules: RuleRow[], events: EventRow[], me = member('sam', 'parent')): World {
   return {
     me, today: '2026-10-18', members: [member('sam', 'parent'), member('lucy', 'junior')], types: [], fields: [],
-    objects: [object('car', 'sam'), object('hens', 'lucy'), object('chain', 'sam')], rules, events, pending: [],
+    objects: [object('car', 'sam'), object('hens', 'lucy'), object('chain', 'sam')], rules, events, pending: [], slots: [], changes: [],
   };
 }
 
@@ -79,5 +79,61 @@ describe('due wording', () => {
     expect(whenText('2026-10-23', '2026-10-18')).toBe('Fri 23 Oct');
     expect(whenText('2026-11-14', '2026-10-18')).toBe('14 Nov');
     expect(whenText('2027-03-03', '2026-10-18')).toBe('3 Mar 2027');
+  });
+});
+
+describe('turns (dishes on different days for different people)', () => {
+  const dishes = (events: EventRow[]) => {
+    const w = world([
+      rule('marley', 'hens', { kind: 'weekly', weekdays: [2, 7], owner_id: 'marley', event_kind: 'Done', created_at: '2026-10-19T08:00:00Z' }),
+      rule('lucy', 'hens', { kind: 'weekly', weekdays: [1, 4], owner_id: 'lucy', event_kind: 'Done', created_at: '2026-10-19T08:00:00Z' }),
+    ], events);
+    w.today = '2026-10-21'; // Wednesday
+    return w;
+  };
+
+  it('each turn only counts its own person\'s entries', () => {
+    const w = dishes([{ ...event('e1', 'hens', 'Done', '2026-10-20'), created_by: 'lucy' }]);
+    expect(dueFor(w, w.rules[0])?.due.dueOn).toBe('2026-10-20'); // Marley's Tuesday still open
+    expect(dueFor(w, w.rules[0])?.bucket).toBe('overdue');
+    expect(dueFor(w, w.rules[1])?.due.dueOn).toBe('2026-10-22'); // Lucy's next is Thursday
+  });
+
+  it('covering someone\'s turn counts for them', () => {
+    const w = dishes([{ ...event('e1', 'hens', 'Done', '2026-10-20'), created_by: 'lucy', rule_id: 'marley' }]);
+    expect(dueFor(w, w.rules[0])?.due.dueOn).toBe('2026-10-25');
+  });
+
+  it('a person page lists only their turns', () => {
+    const w = dishes([]);
+    w.types = [{ id: 't-thing', name: 'Chore or task', icon: null, sort_order: 0, confirm_kid_logs: true, assignable: true, created_at: '' }];
+    expect(choresOf(w, 'marley').map((c) => c.rules.map((r) => r.id))).toEqual([['marley']]);
+    expect(choresOf(w, 'sam').map((c) => c.object.id)).not.toContain('hens');
+  });
+});
+
+describe('a one-off task', () => {
+  it('done early still counts as done', () => {
+    const w = world([rule('t', 'chain', { kind: 'fixed_date', due_on: '2026-10-25', starts_on: '2026-10-18', lead_days: [1], event_kind: 'Done' })],
+      [event('e', 'chain', 'Done', '2026-10-19')]);
+    expect(dueFor(w, w.rules[0])?.due.status).toBe('done');
+  });
+});
+
+describe('recent things', () => {
+  it('what you logged lately comes first, then what you look after', () => {
+    const w = world([], [event('e1', 'chain', 'Sharpened', '2026-10-17'), { ...event('e2', 'hens', 'Fed', '2026-10-18'), created_by: 'lucy' }]);
+    expect(recentThings(w).map((o) => o.id)).toEqual(['chain', 'car']);
+  });
+});
+
+describe('activities', () => {
+  it('a date change overrides the usual drivers', () => {
+    const w = world([], []);
+    w.slots = [{ id: 's', object_id: 'hens', weekdays: [4], starts_at: '17:00:00', ends_at: '19:00:00', drop_off_by: 'crystal', pick_up_by: 'sam', active: true, created_by: 'lucy', created_at: '' }];
+    w.changes = [{ slot_id: 's', on_date: '2026-10-29', cancelled: false, drop_off_by: 'sam', pick_up_by: 'sam', note: null, changed_by: 'sam', changed_at: '' }];
+    expect(sessionsOn(w, '2026-10-22')[0]).toMatchObject({ startsAt: '17:00', endsAt: '19:00', dropOffBy: 'crystal', changed: false });
+    expect(sessionsOn(w, '2026-10-29')[0]).toMatchObject({ dropOffBy: 'sam', changed: true });
+    expect(sessionsOn(w, '2026-10-23')).toEqual([]);
   });
 });
