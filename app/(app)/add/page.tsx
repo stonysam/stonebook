@@ -18,7 +18,7 @@ export default async function Add({ searchParams }: { searchParams: Promise<{ ty
       <main className="page">
         <h1>Add something</h1>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))', gap: 10 }}>
-          {w.types.map((t) => (
+          {w.types.filter((t) => !t.hidden).map((t) => (
             <Link key={t.id} href={`/add?type=${t.id}${owner ? `&owner=${owner}` : ''}`} className="card"
               style={{ minHeight: 88, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', textDecoration: 'none', color: 'inherit', fontWeight: 500 }}>
               {t.name}

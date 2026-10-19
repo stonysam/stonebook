@@ -22,7 +22,7 @@ export default async function Settings() {
   return (
     <main className="page">
       <Link href="/family" className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>Back to Family</Link>
-      <h1>Reminders, calendar and tablet</h1>
+      <h1>Settings</h1>
       {me.role === 'child' ? <p>Mum or Dad get your reminders.</p> : (
         <>
           <PushToggle publicKey={(publicKey as string | null) ?? null} />
@@ -32,6 +32,12 @@ export default async function Settings() {
             </p>
           )}
           <CalendarLink url={link ? `${origin}/cal/${link.token}.ics` : null} />
+          {me.role === 'parent' && (
+            <Link href="/settings/kinds" className="card card-link">
+              <span className="item-title">Kinds of things</span>
+              <span className="small">Add a new kind, like Cabin or Bike, and choose the details each one has.</span>
+            </Link>
+          )}
           {me.role === 'parent' && (
             <FamilyTablet meId={me.id} mePinSet={pinSet.has(me.id)}
               kids={(kids ?? []).map((k) => ({ id: k.id, name: k.display_name, pinSet: pinSet.has(k.id) }))} />

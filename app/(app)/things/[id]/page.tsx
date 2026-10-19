@@ -33,7 +33,7 @@ export default async function ItemPage({ params, searchParams }: {
   const parent = o.parent_id ? w.objects.find((x) => x.id === o.parent_id) : undefined;
   const groupOptions = grouped ? w.objects.filter((x) => x.object_type_id === o.object_type_id && x.is_group && !x.archived_at).map((x) => ({ id: x.id, name: x.name })) : [];
   const photoOf = (x: typeof o) => ((x.field_values ?? {}) as Record<string, unknown>).photo as string | undefined;
-  const urls = grouped ? await photoUrls([photoOf(o), ...inGroup.map(photoOf)]) : {};
+  const urls = grouped || defs.some((d) => d.key === 'photo') ? await photoUrls([photoOf(o), ...inGroup.map(photoOf)]) : {};
   const photo = photoOf(o) ? urls[photoOf(o)!] : undefined;
   const nameById = Object.fromEntries(inGroup.map((x) => [x.id, x.name]));
   // A group's history includes its animals' entries, so the paddock's story is in one place.

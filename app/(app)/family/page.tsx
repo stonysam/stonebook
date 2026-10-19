@@ -28,8 +28,8 @@ export default async function Family() {
       </section>
 
       <Link href="/settings" className="card card-link">
-        <span className="item-title">Reminders, calendar and tablet</span>
-        <span className="muted" style={{ fontSize: 14 }}>Morning summary and lift reminders on your phone, your private calendar link{w.me.role === 'parent' ? ', and Benji mode for the family tablet' : ''}.</span>
+        <span className="item-title">Settings</span>
+        <span className="muted" style={{ fontSize: 14 }}>Morning summary and lift reminders on your phone, your private calendar link{w.me.role === 'parent' ? ', Benji mode for the family tablet, and kinds of things' : ''}.</span>
       </Link>
 
       <form action="/auth/signout" method="post">

@@ -189,3 +189,4 @@ a:not(.nav a):has(> .link-pending.on) { background-color: var(--surface-2); }
 /* Photos (animals) */
 .photo { display: block; flex: 0 0 auto; border-radius: 16px; object-fit: cover; background: var(--surface-2); }
 .photo-empty { border: 1px dashed var(--line, currentColor); opacity: .6; }
+.icon-btn { min-width: 44px; min-height: 44px; padding: 0; font-size: 20px; justify-content: center; }

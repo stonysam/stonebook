@@ -235,6 +235,31 @@ describe('logging events', () => {
   });
 });
 
+describe('parents edit kinds of things', () => {
+  it('counts and removes a detail across everyone’s things, private ones included', async () => {
+    const cabin = (await as('sam', () => rows(`insert into object_types (name, sort_order) values ('Cabin', 200) returning id`)))[0].id;
+    typeId.Cabin = cabin as string;
+    const sleeps = (await as('sam', () => rows(`insert into field_defs (object_type_id, key, label, kind) values ($1, 'sleeps', 'Sleeps', 'number') returning id`, [cabin])))[0].id;
+    const size = (await as('sam', () => rows(`insert into field_defs (object_type_id, key, label, kind, options, multiple) values ($1, 'beds', 'Beds', 'choice', '["Single","Double"]', true) returning id`, [cabin])))[0].id;
+    await as('crystal', () => addObject({ name: 'Crystal’s den', type: 'Cabin', owner: id.crystal, visibility: 'private', fields: { sleeps: 2, beds: ['Double'] } }));
+    await as('sam', () => addObject({ name: 'Forest cabin', type: 'Cabin', owner: id.sam, fields: { sleeps: 4 } }));
+    expect((await as('sam', () => rows('select public.kind_usage($1) n', [cabin])))[0].n).toBe(2);
+    expect((await as('sam', () => rows('select public.field_usage($1, $2) n', [size, 'Double'])))[0].n).toBe(1);
+    expect((await as('sam', () => rows('select public.field_usage($1, $2) n', [size, 'Single'])))[0].n).toBe(0);
+    await expect(as('eldest', () => rows('select public.remove_field($1)', [sleeps]))).rejects.toThrow(/Only Mum or Dad/);
+    await expect(as('eldest', () => rows(`insert into field_defs (object_type_id, key, label, kind) values ($1, 'x', 'X', 'text')`, [cabin]))).rejects.toThrow(/row-level security/);
+    expect((await as('sam', () => rows('select public.remove_field($1) n', [sleeps])))[0].n).toBe(2);
+    const left = await rows(`select field_values from objects where object_type_id = $1`, [cabin]);
+    expect(left.every((r) => !('sleeps' in (r.field_values as object)))).toBe(true);
+    await expect(as('sam', () => rows(`delete from object_types where id = $1`, [cabin]))).rejects.toThrow(/foreign key/);
+  });
+
+  it('keeps details the app relies on', async () => {
+    const pic = (await rows(`select f.id from field_defs f join object_types t on t.id = f.object_type_id where t.name = 'Chore or task' and f.key = 'picture'`))[0].id;
+    await expect(as('sam', () => rows('select public.remove_field($1)', [pic]))).rejects.toThrow(/relies on/);
+  });
+});
+
 describe('animals one by one, in groups', () => {
   it('puts an animal in one group, never a group in a group or an animal in an animal', async () => {
     const paddock = await as('sam', () => addObject({ name: 'Horses and Clyde', type: 'Animal or flock', owner: id.sam, group: true, fields: { species: ['Horse', 'Donkey'], head_count: 6 } }));
