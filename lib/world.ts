@@ -2,8 +2,9 @@
 // derived views the screens need. Row-level security has already filtered it,
 // so nothing here decides who may see what.
 import { cache } from 'react';
-import { computeDue, type DueResult, type EventRecord, type Rule } from '@/src/engine/due';
-import { addDays, daysBetween, isoWeekday, todayIn } from '@/src/engine/dates';
+import { computeDue, type DueResult } from '@/src/engine/due';
+import * as plan from '@/src/engine/plan';
+import { addDays, daysBetween, todayIn } from '@/src/engine/dates';
 import { getMe } from '@/lib/auth';
 import { dayLabel } from '@/lib/format';
 import type { ActivityChangeRow, ActivitySlotRow, AwaitingRow, EventRow, FieldDefRow, MemberRow, ObjectRow, ObjectTypeRow, RuleRow } from '@/lib/database.types';
@@ -59,20 +60,8 @@ export const memberName = (w: World, id: string | null | undefined) =>
 export const typeOf = (w: World, o: ObjectRow) => w.types.find((t) => t.id === o.object_type_id);
 export const eventsOf = (w: World, objectId: string) => w.events.filter((e) => e.object_id === objectId);
 
-export function toEngineRule(r: RuleRow): Rule {
-  return {
-    id: r.id, kind: r.kind, eventKind: r.event_kind, everyMonths: r.every_months, everyDays: r.every_days,
-    meterEvery: r.meter_every, meterUnit: r.meter_unit, dueOn: r.due_on, renewEveryMonths: r.renew_every_months,
-    // A weekly chore with no start date starts the day it was set up.
-    startsOn: r.starts_on ?? (r.kind === 'weekly' ? todayIn('Europe/Prague', new Date(r.created_at)) : null),
-    meterStart: r.meter_start, weekdays: r.weekdays, leadDays: r.lead_days, overdueRepeatDays: r.overdue_repeat_days,
-  };
-}
-
-export const toEngineEvent = (e: EventRow): EventRecord => ({
-  id: e.id, kind: e.kind, occurredOn: e.occurred_on, meterValue: e.meter_value, meterUnit: e.meter_unit,
-  data: (e.data ?? {}) as Record<string, unknown>, createdAt: e.created_at,
-});
+export const toEngineRule = plan.toEngineRule;
+export const toEngineEvent = plan.toEngineEvent;
 
 export interface DueRow {
   rule: RuleRow;
@@ -82,19 +71,13 @@ export interface DueRow {
   bucket: 'overdue' | 'week' | 'month' | 'later' | 'setup' | 'none';
 }
 
-const sameKind = (a: string | null, b: string | null) => (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase();
+/** The entries that count for a reminder (see plan.eventsForRule: turns, and entries that name their turn). */
+export const eventsForRule = (w: World, rule: RuleRow): EventRow[] => plan.eventsForRule(w.rules, w.events, rule);
 
-/**
- * The entries that count for a reminder. An entry that names its reminder counts only for it.
- * When an item has turns (the same job reminding different people, like dishes), an entry
- * that names none counts for the turn of whoever logged it.
- */
-export function eventsForRule(w: World, rule: RuleRow): EventRow[] {
-  const turns = w.rules.filter((r) => r.object_id === rule.object_id && r.kind !== 'record' && sameKind(r.event_kind, rule.event_kind));
-  const hasTurns = new Set(turns.map((r) => r.owner_id)).size > 1;
-  return eventsOf(w, rule.object_id).filter((e) =>
-    e.rule_id ? e.rule_id === rule.id : !hasTurns || e.created_by === rule.owner_id);
-}
+/** Just the data the shared planning functions need. */
+export const planData = (w: World): plan.PlanData => ({
+  members: w.members, objects: w.objects, types: w.types, rules: w.rules, events: w.events, slots: w.slots, changes: w.changes,
+});
 
 export function dueFor(w: World, rule: RuleRow): DueRow | null {
   const object = w.objects.find((o) => o.id === rule.object_id);
@@ -169,24 +152,12 @@ export interface Session {
   note: string | null;
 }
 
-const hhmm = (t: string | null) => (t ? t.slice(0, 5) : null);
-
 /** Activities and work happening on a date, with that date's changes applied, earliest first. */
 export function sessionsOn(w: World, date: string, objectId?: string): Session[] {
-  const day = isoWeekday(date);
-  return w.slots
-    .filter((s) => s.weekdays.includes(day) && (!objectId || s.object_id === objectId))
-    .flatMap((slot) => {
-      const object = w.objects.find((o) => o.id === slot.object_id);
-      if (!object || object.archived_at) return [];
-      const c = w.changes.find((x) => x.slot_id === slot.id && x.on_date === date);
-      return [{
-        slot, object, date, startsAt: hhmm(slot.starts_at)!, endsAt: hhmm(slot.ends_at),
-        dropOffBy: c ? c.drop_off_by : slot.drop_off_by, pickUpBy: c ? c.pick_up_by : slot.pick_up_by,
-        cancelled: c?.cancelled ?? false, changed: !!c, note: c?.note ?? null,
-      }];
-    })
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  return plan.sessionsOn(planData(w), date, objectId).map((s) => ({
+    slot: w.slots.find((x) => x.id === s.slotId)!, object: w.objects.find((o) => o.id === s.objectId)!, date: s.date,
+    startsAt: s.startsAt, endsAt: s.endsAt, dropOffBy: s.dropOffBy, pickUpBy: s.pickUpBy, cancelled: s.cancelled, changed: s.changed, note: s.note,
+  }));
 }
 
 /** The next few dates an activity happens, from today. */

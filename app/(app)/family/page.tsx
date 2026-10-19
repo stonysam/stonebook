@@ -28,13 +28,10 @@ export default async function Family() {
         })}
       </section>
 
-      <section className="card stack">
-        <strong>Coming next</strong>
-        <span className="muted" style={{ fontSize: 14 }}>
-          Reminders on your phone and your private calendar link arrive in the next update. Benji&apos;s PIN profile and
-          photo import follow after that.
-        </span>
-      </section>
+      <Link href="/settings" className="card card-link">
+        <span className="item-title">Reminders and calendar</span>
+        <span className="muted" style={{ fontSize: 14 }}>Morning summary and lift reminders on your phone; your private calendar link.</span>
+      </Link>
 
       <form action="/auth/signout" method="post">
         <button className="btn btn-block">Sign out</button>

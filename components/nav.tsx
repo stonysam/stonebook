@@ -18,7 +18,7 @@ export function Nav({ feedCount, showFamily }: { feedCount: number; showFamily: 
     { href: '/things', key: 'things', label: 'Things', match: (p: string) => p.startsWith('/things') },
     { href: '/feed', key: 'feed', label: 'Feed', match: (p: string) => p.startsWith('/feed') },
     { href: '/add', key: 'add', label: 'Add', match: (p: string) => p.startsWith('/add') },
-    ...(showFamily ? [{ href: '/family', key: 'family', label: 'Family', match: (p: string) => p.startsWith('/family') }] : []),
+    ...(showFamily ? [{ href: '/family', key: 'family', label: 'Family', match: (p: string) => p.startsWith('/family') || p.startsWith('/settings') }] : []),
   ];
   return (
     <nav className="nav" aria-label="Main">

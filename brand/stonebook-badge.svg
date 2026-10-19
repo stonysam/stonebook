@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-130 -205 260 330" width="96" height="96">
+  <!-- Notification badge: the wolf track alone, white on transparent (Android tints it). -->
+  <g fill="#fff">
+    <path d="M0 -12 C30 -12 70 24 76 64 C80 96 58 112 34 104 C20 99 10 94 0 94 C-10 94 -20 99 -34 104 C-58 112 -80 96 -76 64 C-70 24 -30 -12 0 -12 Z"/>
+    <ellipse cx="-92" cy="-40" rx="28" ry="40" transform="rotate(-18 -92 -40)"/>
+    <ellipse cx="92" cy="-40" rx="28" ry="40" transform="rotate(18 92 -40)"/>
+    <ellipse cx="-34" cy="-118" rx="30" ry="44" transform="rotate(-5 -34 -118)"/>
+    <ellipse cx="34" cy="-118" rx="30" ry="44" transform="rotate(5 34 -118)"/>
+  </g>
+</svg>

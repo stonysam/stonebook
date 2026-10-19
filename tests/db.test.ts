@@ -57,7 +57,9 @@ beforeAll(async () => {
   await db.exec(sql('./supabase-auth-stub.sql'));
   const migrations = new URL('../supabase/migrations/', import.meta.url);
   for (const f of readdirSync(migrations).filter((f) => f.endsWith('.sql')).sort()) {
-    await db.exec(readFileSync(new URL(f, migrations), 'utf8'));
+    const text = readFileSync(new URL(f, migrations), 'utf8');
+    if (text.startsWith('-- live-only')) continue; // pg_cron, pg_net, Vault: Supabase only
+    await db.exec(text);
   }
   await db.exec(sql('../supabase/seed.sql'));
 
@@ -500,5 +502,49 @@ describe('activities and work', () => {
 
   it('strangers see nothing', async () => {
     expect(await as('stranger', () => rows('select * from activity_slots'), 'stranger@example.com')).toEqual([]);
+  });
+});
+
+describe('phone reminders', () => {
+  const save = (who: keyof typeof authId, endpoint: string) => as(who, () => db.query(
+    `select save_push_subscription($1, 'key', 'auth', 'Pixel')`, [endpoint]));
+
+  it('each person saves and sees only their own phones; a phone signed in as someone else moves over', async () => {
+    await save('junior', 'https://push.example/one');
+    expect((await as('junior', () => rows('select member_id from push_subscriptions')))).toEqual([{ member_id: id.junior }]);
+    expect(await as('sam', () => rows('select * from push_subscriptions'))).toEqual([]);
+    await save('crystal', 'https://push.example/one');
+    expect(await as('junior', () => rows('select * from push_subscriptions'))).toEqual([]);
+    await expect(as('crystal', () => db.query(`insert into push_subscriptions (endpoint, member_id, p256dh, auth) values ('https://x', $1, 'k', 'a')`, [id.junior])))
+      .rejects.toThrow(/permission denied/);
+    await expect(save('stranger', 'https://push.example/two')).rejects.toThrow(/Not signed in/);
+  });
+
+  it('nobody can read what was sent', async () => {
+    await expect(as('sam', () => rows('select * from notification_log'))).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe('private calendar links', () => {
+  it('a link shows only what its person can see, and a new link kills the old one', async () => {
+    const [{ calendar_link_reset: first }] = await as('eldest', () => rows('select calendar_link_reset()'));
+    await db.exec('set role anon');
+    const data = (await rows('select calendar_data($1) as d', [first]).finally(() => db.exec('reset role')))[0].d as
+      { member_id: string; objects: { name: string }[] };
+    expect(data.member_id).toBe(id.eldest);
+    const seen = data.objects.map((o) => o.name);
+    expect(seen).toContain('Škoda Octavia');
+    expect(seen).toContain('Uni deadlines'); // their own private item
+    expect(seen).not.toContain("Crystal's passport"); // someone else's personal item
+
+    const [{ calendar_link_reset: second }] = await as('eldest', () => rows('select calendar_link_reset()'));
+    await db.exec('set role anon');
+    try {
+      expect((await rows('select calendar_data($1) as d', [first]))[0].d).toBeNull();
+      expect((await rows('select calendar_data($1) as d', [second]))[0].d).not.toBeNull();
+      expect((await rows('select calendar_data($1) as d', ['short']))[0].d).toBeNull();
+      await expect(rows('select * from calendar_links')).rejects.toThrow(/permission denied/);
+    } finally { await db.exec('reset role'); }
+    expect(await as('sam', () => rows('select * from calendar_links where member_id = $1', [id.eldest]))).toEqual([]);
   });
 });

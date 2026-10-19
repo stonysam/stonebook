@@ -36,6 +36,8 @@ export type ActivityChangeRow = {
   slot_id: string; on_date: string; cancelled: boolean; drop_off_by: string | null; pick_up_by: string | null;
   note: string | null; changed_by: string | null; changed_at: string;
 };
+export type PushSubscriptionRow = { endpoint: string; member_id: string; p256dh: string; auth: string; device: string | null; created_at: string };
+export type CalendarLinkRow = { member_id: string; token: string; created_at: string };
 export type ConfirmationRow = { event_id: string; approved: boolean; decided_by: string; decided_at: string; note: string | null };
 export type ReactionRow = { event_id: string; member_id: string; emoji: string; created_at: string };
 export type FeedSeenRow = { member_id: string; seen_at: string };
@@ -61,6 +63,8 @@ export type Database = {
       rules: Table<RuleRow, Opt<RuleRow, 'id' | 'event_kind' | 'every_months' | 'every_days' | 'meter_every' | 'meter_unit' | 'due_on' | 'renew_every_months' | 'starts_on' | 'meter_start' | 'weekdays' | 'lead_days' | 'overdue_repeat_days' | 'active' | 'created_by' | 'created_at'>>;
       activity_slots: Table<ActivitySlotRow, Opt<ActivitySlotRow, 'id' | 'ends_at' | 'drop_off_by' | 'pick_up_by' | 'active' | 'created_by' | 'created_at'>>;
       activity_changes: Table<ActivityChangeRow, Opt<ActivityChangeRow, 'cancelled' | 'drop_off_by' | 'pick_up_by' | 'note' | 'changed_by' | 'changed_at'>>;
+      push_subscriptions: Table<PushSubscriptionRow, Opt<PushSubscriptionRow, 'device' | 'created_at'>>;
+      calendar_links: Table<CalendarLinkRow, Opt<CalendarLinkRow, 'created_at'>>;
       confirmations: Table<ConfirmationRow, Opt<ConfirmationRow, 'decided_at' | 'note'>>;
       reactions: Table<ReactionRow, Opt<ReactionRow, 'created_at'>>;
       feed_seen: Table<FeedSeenRow, Opt<FeedSeenRow, 'seen_at'>>;
@@ -70,7 +74,13 @@ export type Database = {
       awaiting_confirmation: View<AwaitingRow>;
       family_feed: View<FeedRow>;
     };
-    Functions: { claim_membership: { Args: never; Returns: string } };
+    Functions: {
+      claim_membership: { Args: never; Returns: string };
+      save_push_subscription: { Args: { p_endpoint: string; p_p256dh: string; p_auth: string; p_device: string }; Returns: undefined };
+      calendar_link_reset: { Args: never; Returns: string };
+      calendar_data: { Args: { p_token: string }; Returns: Json };
+      push_public_key: { Args: never; Returns: string | null };
+    };
     Enums: { member_role: MemberRole; visibility: Visibility; field_kind: FieldKind; rule_kind: RuleKindDb };
     CompositeTypes: Record<string, never>;
   };

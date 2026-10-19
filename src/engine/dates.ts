@@ -69,3 +69,29 @@ export function minDate(...dates: (string | null | undefined)[]): string | null 
 export function todayIn(timeZone = 'Europe/Prague', now: Date = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 }
+
+/** The family's wall clock: today's date and minutes since midnight in the time zone. */
+export function nowIn(timeZone = 'Europe/Prague', now: Date = new Date()): { date: string; minutes: number } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+      .formatToParts(now).map((p) => [p.type, p.value]),
+  );
+  return { date: todayIn(timeZone, now), minutes: Number(parts.hour) * 60 + Number(parts.minute) };
+}
+
+/** The instant a local date and time ("2026-10-22", "17:00") happens in the time zone, daylight saving included. */
+export function zonedToUtc(date: string, hhmm: string, timeZone = 'Europe/Prague'): Date {
+  const { y, m, d } = parseDate(date);
+  const [hh, mm] = hhmm.split(':').map(Number);
+  const asUtc = Date.UTC(y, m - 1, d, hh, mm);
+  const offset = (t: number) => {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', {
+      timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+    return Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), Number(p.hour), Number(p.minute)) - t;
+  };
+  const first = asUtc - offset(asUtc);
+  return new Date(asUtc - offset(first));
+}
+
+export const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));

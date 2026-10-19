@@ -1,5 +1,6 @@
 import Link from '@/components/link';
 import { LogButton } from '@/components/log-button';
+import { ReminderNudge } from '@/components/reminder-nudge';
 import { SessionCard } from '@/components/session-card';
 import { possessive, todayHeading, whenText } from '@/lib/format';
 import { isChore } from '@/lib/types';
@@ -50,6 +51,8 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
           <Link href="/?view=family" className={view === 'family' ? 'on' : ''} aria-current={view === 'family' ? 'page' : undefined}>Whole family</Link>
         </div>
       )}
+
+      {me.role !== 'child' && <ReminderNudge />}
 
       {recent.length > 0 && (
         <nav className="scroll-x" aria-label="Recent things">

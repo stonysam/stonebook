@@ -2,7 +2,8 @@ import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './env';
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/not-on-list', '/manifest.webmanifest'];
+// /cal/ is the private calendar feed: calendar apps can't sign in, the link's token is the key.
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/not-on-list', '/manifest.webmanifest', '/cal/'];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

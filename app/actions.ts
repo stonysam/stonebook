@@ -326,3 +326,41 @@ export async function changeSession(input: {
   done();
   return { ok: true, message: input.reset ? 'Back to the usual.' : input.cancelled ? 'Marked as off that day.' : 'Changed for that day.' };
 }
+
+// ---------------------------------------------------------------------------
+// Reminders on this phone, and the private calendar link
+// ---------------------------------------------------------------------------
+export async function savePushSubscription(sub: { endpoint: string; p256dh: string; auth: string; device: string }): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  if (!/^https:\/\//.test(sub.endpoint)) return fail('This browser gave an unusual address. Try Chrome.');
+  const { error } = await supabase.rpc('save_push_subscription', {
+    p_endpoint: sub.endpoint, p_p256dh: sub.p256dh, p_auth: sub.auth, p_device: sub.device.slice(0, 120),
+  });
+  if (error) return fail('Couldn’t turn reminders on. Try again.');
+  revalidatePath('/settings');
+  return { ok: true };
+}
+
+export async function removePushSubscription(endpoint: string): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
+  revalidatePath('/settings');
+  return { ok: true };
+}
+
+export async function sendTestPush(): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  const { data, error } = await supabase.functions.invoke('remind', { body: { test: true } });
+  if (error) return fail('The reminder service didn’t answer. Try again in a minute.');
+  const r = data as { phones: number; delivered: number };
+  if (!r.phones) return fail('No phones are set up for you yet.');
+  return { ok: true, message: r.delivered ? `Sent to ${r.delivered} ${r.delivered === 1 ? 'phone' : 'phones'}. It should arrive in a few seconds.` : 'Couldn’t reach your phone. Turn reminders off and on again.' };
+}
+
+export async function resetCalendarLink(): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  const { error } = await supabase.rpc('calendar_link_reset');
+  if (error) return fail('Couldn’t make a link. Try again.');
+  revalidatePath('/settings');
+  return { ok: true, message: 'New link ready. Any old link has stopped working.' };
+}
