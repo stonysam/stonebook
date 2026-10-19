@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400"><g fill="#fff">
+<rect x="250" y="70" width="56" height="90" rx="6"/>
+<path d="M28,206 L200,62 L372,206 Z" stroke="#fff" stroke-width="20" stroke-linejoin="round"/>
+<path fill-rule="evenodd" d="M70,226 H330 V352 H70 Z M240,262 c-14,-18 -44,-8 -40,16 c3,18 26,30 40,44 c14,-14 37,-26 40,-44 c4,-24 -26,-34 -40,-16 Z"/>
+</g></svg>
