@@ -244,6 +244,14 @@ describe('fields are checked against the object type', () => {
     await expect(as('sam', () => addObject({ name: 'e', type: 'Document', owner: id.sam, fields: { doc_type: 'Passport', holder: id.eldest } }))).resolves.toBeTruthy();
     await expect(as('sam', () => addObject({ name: 'f', type: 'Document', owner: id.sam, fields: { doc_type: 'Passport', holder: 'nobody' } }))).rejects.toThrow(/family member/);
   });
+
+  it('lets an animal group be several species, from the list only', async () => {
+    await expect(as('sam', () => addObject({ name: 'Poultry', type: 'Animal or flock', owner: id.sam, fields: { species: ['Chicken', 'Duck'] } }))).resolves.toBeTruthy();
+    await expect(as('sam', () => addObject({ name: 'Paddock', type: 'Animal or flock', owner: id.sam, fields: { species: ['Horse', 'Donkey'] } }))).resolves.toBeTruthy();
+    await expect(as('sam', () => addObject({ name: 'g', type: 'Animal or flock', owner: id.sam, fields: { species: ['Chicken', 'Dragon'] } }))).rejects.toThrow(/one or more of/);
+    await expect(as('sam', () => addObject({ name: 'h', type: 'Animal or flock', owner: id.sam, fields: { species: [] } }))).rejects.toThrow(/one or more of/);
+    await expect(as('sam', () => addObject({ name: 'i', type: 'Vehicle', owner: id.sam, fields: { fuel: ['Diesel', 'Petrol'] } }))).rejects.toThrow(/must be one of/);
+  });
 });
 
 describe('rules', () => {

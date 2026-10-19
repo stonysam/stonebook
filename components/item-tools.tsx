@@ -14,6 +14,7 @@ export function FieldInput({ def, value, members }: { def: FieldDefRow; value: u
   const v = value == null ? '' : String(value);
   const label = `${def.label}${def.required ? '' : ' (optional)'}`;
   if (def.key === 'picture') return <PicturePicker name={name} initial={v} label={label} />;
+  if (def.kind === 'choice' && def.multiple) return <MultiChoice def={def} name={name} initial={value} label={label} />;
   if (def.kind === 'choice') {
     const opts = Array.isArray(def.options) ? (def.options as string[]) : [];
     return (
@@ -40,6 +41,23 @@ export function FieldInput({ def, value, members }: { def: FieldDefRow; value: u
       <input name={name} defaultValue={v} required={def.required}
         type={def.kind === 'date' ? 'date' : 'text'} inputMode={def.kind === 'number' ? 'decimal' : undefined} />
     </label>
+  );
+}
+
+function MultiChoice({ def, name, initial, label }: { def: FieldDefRow; name: string; initial: unknown; label: string }) {
+  const opts = Array.isArray(def.options) ? (def.options as string[]) : [];
+  const [picks, setPicks] = useState<string[]>(Array.isArray(initial) ? (initial as string[]) : initial ? [String(initial)] : []);
+  const toggle = (o: string) => setPicks((cur) => (cur.includes(o) ? cur.filter((x) => x !== o) : [...cur, o]));
+  return (
+    <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
+      <legend className="small" style={{ marginBottom: 8 }}>{label}{opts.length ? ' Pick all that apply.' : ''}</legend>
+      {picks.map((p) => <input key={p} type="hidden" name={name} value={p} />)}
+      <div className="wrap">
+        {opts.map((o) => <button key={o} type="button" className="chip" aria-pressed={picks.includes(o)} onClick={() => toggle(o)}>{o}</button>)}
+      </div>
+      {def.required && <input tabIndex={-1} aria-hidden required value={picks.length ? 'ok' : ''} onChange={() => {}}
+        style={{ opacity: 0, height: 1, width: 1, padding: 0, border: 0, position: 'absolute' }} />}
+    </fieldset>
   );
 }
 

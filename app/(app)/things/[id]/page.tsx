@@ -43,6 +43,7 @@ export default async function ItemPage({ params, searchParams }: {
   const showValue = (key: string, kindOf: string) => {
     const v = values[key];
     if (v == null || v === '') return null;
+    if (Array.isArray(v)) return v.join(', ').replace(/, ([^,]*)$/, ' and $1');
     return kindOf === 'person' ? memberName(w, String(v)) : String(v);
   };
 

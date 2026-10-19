@@ -101,9 +101,14 @@ export async function markFeedSeen(): Promise<void> {
 // ---------------------------------------------------------------------------
 // Items
 // ---------------------------------------------------------------------------
-function fieldValues(form: FormData, keys: { key: string; kind: string }[]): Record<string, Json> {
+function fieldValues(form: FormData, keys: { key: string; kind: string; multiple?: boolean }[]): Record<string, Json> {
   const out: Record<string, Json> = {};
-  for (const { key, kind } of keys) {
+  for (const { key, kind, multiple } of keys) {
+    if (multiple) {
+      const picks = [...new Set(form.getAll(`f_${key}`).map((v) => clean(v, 300)).filter(Boolean))];
+      if (picks.length) out[key] = picks;
+      continue;
+    }
     const raw = clean(form.get(`f_${key}`), 300);
     if (!raw) continue;
     if (kind === 'number') {
@@ -116,7 +121,7 @@ function fieldValues(form: FormData, keys: { key: string; kind: string }[]): Rec
 
 async function fieldKeys(typeId: string) {
   const { supabase } = await getMe();
-  const { data } = await supabase.from('field_defs').select('key, kind').eq('object_type_id', typeId);
+  const { data } = await supabase.from('field_defs').select('key, kind, multiple').eq('object_type_id', typeId);
   return data ?? [];
 }
 

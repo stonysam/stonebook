@@ -13,7 +13,7 @@ type View<Row> = { Row: Row; Relationships: [] };
 export type PersonColor = 'moss' | 'sky' | 'clay' | 'plum' | 'hay' | 'slate' | 'rose' | 'teal';
 export type MemberRow = { id: string; display_name: string; role: MemberRole; email: string | null; auth_user_id: string | null; created_at: string; color: PersonColor | null };
 export type ObjectTypeRow = { id: string; name: string; icon: string | null; sort_order: number; confirm_kid_logs: boolean; assignable: boolean; created_at: string };
-export type FieldDefRow = { id: string; object_type_id: string; key: string; label: string; kind: FieldKind; options: Json | null; required: boolean; sort_order: number };
+export type FieldDefRow = { id: string; object_type_id: string; key: string; label: string; kind: FieldKind; options: Json | null; required: boolean; sort_order: number; multiple: boolean };
 export type ObjectRow = {
   id: string; object_type_id: string; name: string; owner_id: string; visibility: Visibility; share_with_family: boolean;
   field_values: Json; archived_at: string | null; created_by: string | null; created_at: string;
@@ -60,7 +60,7 @@ export type Database = {
     Tables: {
       members: Table<MemberRow, Opt<MemberRow, 'id' | 'email' | 'auth_user_id' | 'created_at' | 'color'>>;
       object_types: Table<ObjectTypeRow, Opt<ObjectTypeRow, 'id' | 'icon' | 'sort_order' | 'confirm_kid_logs' | 'assignable' | 'created_at'>>;
-      field_defs: Table<FieldDefRow, Opt<FieldDefRow, 'id' | 'options' | 'required' | 'sort_order'>>;
+      field_defs: Table<FieldDefRow, Opt<FieldDefRow, 'id' | 'options' | 'required' | 'sort_order' | 'multiple'>>;
       objects: Table<ObjectRow, Opt<ObjectRow, 'id' | 'visibility' | 'share_with_family' | 'field_values' | 'archived_at' | 'created_by' | 'created_at'>>;
       events: Table<EventRow, Opt<EventRow, 'id' | 'meter_value' | 'meter_unit' | 'data' | 'note' | 'correction_of' | 'voided' | 'created_at' | 'needs_confirmation' | 'rule_id'>>;
       rules: Table<RuleRow, Opt<RuleRow, 'id' | 'event_kind' | 'every_months' | 'every_days' | 'meter_every' | 'meter_unit' | 'due_on' | 'renew_every_months' | 'starts_on' | 'meter_start' | 'weekdays' | 'lead_days' | 'overdue_repeat_days' | 'active' | 'created_by' | 'created_at' | 'completion'>>;

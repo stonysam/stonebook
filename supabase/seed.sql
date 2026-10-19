@@ -35,7 +35,7 @@ join (values
   ('Machine',         'serial',        'Serial number',      'text',   null, false, 30),
   ('Machine',         'meter_unit',    'Usage measured in',  'choice', '["hours","km","none"]', false, 40),
 
-  ('Animal or flock', 'species',       'Species',            'choice', '["Sheep","Goat","Chicken","Duck","Cattle","Horse","Pig","Dog","Cat","Other"]', true, 10),
+  ('Animal or flock', 'species',       'Species',            'choice', '["Sheep","Goat","Chicken","Duck","Cattle","Horse","Donkey","Pig","Dog","Cat","Other"]', true, 10),
   ('Animal or flock', 'head_count',    'How many',           'number', null, false, 20),
   ('Animal or flock', 'vet',           'Vet',                'text',   null, false, 30),
 
@@ -64,3 +64,7 @@ join (values
 ) as f(type_name, key, label, kind, options, required, sort_order)
   on f.type_name = t.name
 on conflict (object_type_id, key) do nothing;
+
+-- An animal group can be several species (chickens and ducks; the horses and the donkey).
+update public.field_defs f set multiple = true from public.object_types t
+ where t.id = f.object_type_id and t.name = 'Animal or flock' and f.key = 'species';
