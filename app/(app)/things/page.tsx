@@ -99,6 +99,7 @@ export default async function Things({ searchParams }: { searchParams: Promise<P
                   <span className="item-title">{o.name}</span>
                   <span className="small">
                     {typeOf(w, o)?.name} · {memberName(w, o.owner_id)}
+                    {o.parent_id ? ` · in ${w.objects.find((g) => g.id === o.parent_id)?.name ?? 'a group'}` : ''}
                     {o.visibility !== 'shared' ? ` · ${o.visibility}` : ''}
                   </span>
                   <span style={{ fontSize: 14 }} className="muted">

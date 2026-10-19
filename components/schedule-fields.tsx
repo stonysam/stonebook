@@ -66,7 +66,7 @@ export function ScheduleFields({ typeName, members, owner, meId, today, inAddFor
         <button type="button" className="btn dashed" style={{ justifyContent: 'flex-start' }} onClick={() => setOpen(true)}>
           + Add a reminder (optional)
         </button>
-        <span className="small">For something done regularly, like {hasMeter ? 'a service or tyre change' : 'a check or a filter change'}. You can also add reminders later.</span>
+        <span className="small">For something done regularly, like {hasMeter ? 'a service or tyre change' : typeName === 'Animal or flock' ? 'worming or a hoof trim' : 'a check or a filter change'}. You can also add reminders later.</span>
       </div>
     );
   }

@@ -6,14 +6,23 @@ import { isActivity } from '@/lib/types';
 import { ActivityFields } from './activity-fields';
 import { CHORE_PICTURES, ChoreIcon } from './chore-icons';
 import type { FieldDefRow, MemberRow, Visibility } from '@/lib/database.types';
+import { PhotoInput } from './photo-input';
 import { ScheduleFields } from './schedule-fields';
 import { useToast } from './toast';
 
-export function FieldInput({ def, value, members }: { def: FieldDefRow; value: unknown; members: MemberRow[] }) {
+export function FieldInput({ def, value, members, photoUrl }: { def: FieldDefRow; value: unknown; members: MemberRow[]; photoUrl?: string | null }) {
   const name = `f_${def.key}`;
   const v = value == null ? '' : String(value);
   const label = `${def.label}${def.required ? '' : ' (optional)'}`;
   if (def.key === 'picture') return <PicturePicker name={name} initial={v} label={label} />;
+  if (def.key === 'photo') return <PhotoInput current={v} currentUrl={photoUrl} label={label} />;
+  if (def.key === 'birth_year') {
+    return (
+      <label className="field">{label}
+        <input name={name} defaultValue={v} inputMode="numeric" pattern="(19|20)[0-9]{2}" maxLength={4} placeholder="e.g. 2019" style={{ maxWidth: 160 }} />
+      </label>
+    );
+  }
   if (def.kind === 'choice' && def.multiple) return <MultiChoice def={def} name={name} initial={value} label={label} />;
   if (def.kind === 'choice') {
     const opts = Array.isArray(def.options) ? (def.options as string[]) : [];
@@ -50,7 +59,7 @@ function MultiChoice({ def, name, initial, label }: { def: FieldDefRow; name: st
   const toggle = (o: string) => setPicks((cur) => (cur.includes(o) ? cur.filter((x) => x !== o) : [...cur, o]));
   return (
     <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
-      <legend className="small" style={{ marginBottom: 8 }}>{label}{opts.length ? ' Pick all that apply.' : ''}</legend>
+      <legend className="small" style={{ marginBottom: 8 }}>{label} (pick all that apply)</legend>
       {picks.map((p) => <input key={p} type="hidden" name={name} value={p} />)}
       <div className="wrap">
         {opts.map((o) => <button key={o} type="button" className="chip" aria-pressed={picks.includes(o)} onClick={() => toggle(o)}>{o}</button>)}
@@ -121,6 +130,7 @@ export function ItemActions(props: {
   objectId: string; name: string; typeName: string; archived: boolean; visibility: Visibility; shareWithFamily: boolean;
   canPrivate: boolean; defs: FieldDefRow[]; values: Record<string, unknown>; members: MemberRow[];
   ownerId: string; meId: string; today: string; canRemind: boolean;
+  grouped?: boolean; groups?: GroupOption[]; isGroup?: boolean; parentId?: string | null; photoUrl?: string | null;
 }) {
   const activity = isActivity(props.typeName);
   const [mode, setMode] = useState<'none' | 'edit' | 'reminder'>('none');
@@ -152,7 +162,8 @@ export function ItemActions(props: {
         <form action={editAction} className="card stack" style={{ gap: 14, border: '2px solid var(--text)' }}>
           <input type="hidden" name="object_id" value={props.objectId} />
           <label className="field">Name<input name="name" defaultValue={props.name} required maxLength={120} /></label>
-          {props.defs.map((d) => <FieldInput key={d.id} def={d} value={props.values[d.key]} members={props.members} />)}
+          <DetailFields defs={props.defs} values={props.values} members={props.members} grouped={!!props.grouped} groups={props.groups}
+            isGroup={props.isGroup} parentId={props.parentId} selfId={props.objectId} photoUrl={props.photoUrl} />
           <VisibilityPicker initial={props.visibility} canPrivate={props.canPrivate} initialShare={props.shareWithFamily} />
           {editState && !editState.ok && <p role="alert" style={{ margin: 0, fontWeight: 600 }}>{editState.error}</p>}
           <button className="btn btn-primary" disabled={editing}>{editing ? 'Saving…' : 'Save details'}</button>
@@ -273,5 +284,42 @@ export function CompletionSwitch({ ruleId, value }: { ruleId: string; value: 'do
       </div>
       {toast.node}
     </div>
+  );
+}
+
+export interface GroupOption { id: string; name: string }
+
+/**
+ * Details for a type that has groups (animals): one animal or a group first, then the fields
+ * that fit (a birth year for one animal, a head count for a group), and the group it's part of.
+ */
+export function DetailFields({ defs, values, members, grouped, groups = [], isGroup: initialGroup = false, parentId = null, selfId, photoUrl }: {
+  defs: FieldDefRow[]; values: Record<string, unknown>; members: MemberRow[]; grouped: boolean;
+  groups?: GroupOption[]; isGroup?: boolean; parentId?: string | null; selfId?: string; photoUrl?: string | null;
+}) {
+  const [group, setGroup] = useState(initialGroup);
+  const field = (d: FieldDefRow) => <FieldInput key={d.id} def={d} value={values[d.key]} members={members} photoUrl={photoUrl} />;
+  if (!grouped) return <>{defs.map(field)}</>;
+  const others = groups.filter((g) => g.id !== selfId);
+  return (
+    <>
+      <input type="hidden" name="is_group" value={group ? '1' : '0'} />
+      <div className="seg" role="radiogroup" aria-label="One or a group">
+        <button type="button" role="radio" aria-checked={!group} className={!group ? 'on' : ''} onClick={() => setGroup(false)}>One animal</button>
+        <button type="button" role="radio" aria-checked={group} className={group ? 'on' : ''} onClick={() => setGroup(true)}>A group</button>
+      </div>
+      <span className="small" style={{ marginTop: -8 }}>
+        {group ? 'A flock or herd you look after together, like the hens. Add animals to it one by one if they need their own history.' : 'One animal with its own history, like a vet visit.'}
+      </span>
+      {!group && (
+        <label className="field">Part of a group (optional)
+          <select name="parent_id" defaultValue={parentId ?? ''}>
+            <option value="">No group</option>
+            {others.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        </label>
+      )}
+      {defs.filter((d) => (group ? d.key !== 'birth_year' : d.key !== 'head_count')).map(field)}
+    </>
   );
 }

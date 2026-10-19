@@ -2,6 +2,8 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Photos are shrunk in the browser first (about 300 KB); this leaves room.
+  experimental: { serverActions: { bodySizeLimit: '3mb' } },
   async headers() {
     return [
       {

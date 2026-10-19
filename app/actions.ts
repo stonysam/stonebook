@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { KID_COOKIE } from '@/lib/kid';
 import { redirect } from 'next/navigation';
+import { removePhoto, savePhoto } from '@/lib/photos';
 import { getMe } from '@/lib/auth';
 import { addDays, isoWeekday, parseDate, todayIn } from '@/src/engine/dates';
 import type { Json, RuleKindDb, Visibility } from '@/lib/database.types';
@@ -119,6 +120,28 @@ function fieldValues(form: FormData, keys: { key: string; kind: string; multiple
   return out;
 }
 
+/** A photo field may only point at this item's own photos. */
+function keepOwnPhoto(values: Record<string, Json>, objectId: string): Record<string, Json> {
+  if (typeof values.photo === 'string' && !values.photo.startsWith(`${objectId}/`)) delete values.photo;
+  return values;
+}
+
+/** Types with groups (animals): is this a group, and which group is it part of (one at most). */
+async function groupingFromForm(form: FormData, typeId: string): Promise<{ row?: { is_group: boolean; parent_id: string | null }; error?: string }> {
+  if (!form.has('is_group')) return {};
+  const { supabase } = await getMe();
+  const { data: type } = await supabase.from('object_types').select('groups').eq('id', typeId).single();
+  if (!type?.groups) return {};
+  const isGroup = form.get('is_group') === '1';
+  const parent = isGroup ? '' : clean(form.get('parent_id'), 40);
+  return { row: { is_group: isGroup, parent_id: parent || null } };
+}
+
+function friendlyError(message: string) {
+  if (/required|must|group|part of|members/.test(message)) return message;
+  return 'Couldn’t save. Check the details.';
+}
+
 async function fieldKeys(typeId: string) {
   const { supabase } = await getMe();
   const { data } = await supabase.from('field_defs').select('key, kind, multiple').eq('object_type_id', typeId);
@@ -229,6 +252,8 @@ export async function createItem(_prev: ActionResult | null, form: FormData): Pr
   if (new Set(form.getAll('people')).size > 1 && visibility !== 'shared') return fail('A group job is shared with the family, so everyone on it can see it.');
 
   const objectId = crypto.randomUUID();
+  const grouping = await groupingFromForm(form, typeId);
+  if (grouping.error) return fail(grouping.error);
   const ruleCheck = isActivity(type.name) ? { rows: [] } : rulesFromForm(form, objectId, ownerId, isChore(type.name));
   if (ruleCheck.error) return fail(ruleCheck.error);
   const slotCheck = isActivity(type.name) ? slotFromForm(form, objectId) : {};
@@ -237,9 +262,16 @@ export async function createItem(_prev: ActionResult | null, form: FormData): Pr
   const { error } = await supabase.from('objects').insert({
     id: objectId, object_type_id: typeId, name, owner_id: ownerId, visibility,
     share_with_family: visibility === 'personal' && form.get('share_with_family') === 'on',
-    field_values: fieldValues(form, await fieldKeys(typeId)),
+    field_values: keepOwnPhoto(fieldValues(form, await fieldKeys(typeId)), objectId),
+    ...grouping.row,
   });
-  if (error) return fail(error.message.includes('required') || error.message.includes('must') ? error.message : 'Couldn’t save. Check the details.');
+  if (error) return fail(friendlyError(error.message));
+  const photo = await savePhoto(objectId, form.get('photo_file'));
+  if (photo.error) return fail(`Saved, but ${photo.error.charAt(0).toLowerCase()}${photo.error.slice(1)}`);
+  if (photo.path) {
+    const { data: row } = await supabase.from('objects').select('field_values').eq('id', objectId).single();
+    await supabase.from('objects').update({ field_values: { ...(row?.field_values as object), photo: photo.path } }).eq('id', objectId);
+  }
   if (ruleCheck.rows.length) {
     const { error: ruleError } = await supabase.from('rules').insert(ruleCheck.rows as never);
     if (ruleError) return fail('Saved, but the reminder didn’t save. Add it from the item page.');
@@ -256,18 +288,29 @@ export async function updateDetails(_prev: ActionResult | null, form: FormData):
   const { supabase } = await getMe();
   const objectId = clean(form.get('object_id'), 40);
   const name = clean(form.get('name'), 120);
-  const { data: obj } = await supabase.from('objects').select('object_type_id').eq('id', objectId).single();
+  const { data: obj } = await supabase.from('objects').select('object_type_id, field_values').eq('id', objectId).single();
   if (!obj) return fail('Not found.');
   if (!name) return fail('Give it a name.');
   const visibility = clean(form.get('visibility'), 10) as Visibility;
-  const patch: Record<string, unknown> = { name, field_values: fieldValues(form, await fieldKeys(obj.object_type_id)) };
+  const grouping = await groupingFromForm(form, obj.object_type_id);
+  if (grouping.error) return fail(grouping.error);
+  const values = keepOwnPhoto(fieldValues(form, await fieldKeys(obj.object_type_id)), objectId);
+  const photo = await savePhoto(objectId, form.get('photo_file'));
+  if (photo.error) return fail(photo.error);
+  if (photo.path) values.photo = photo.path;
+  const oldPhoto = (obj.field_values as Record<string, unknown> | null)?.photo as string | undefined;
+  const patch: Record<string, unknown> = { name, field_values: values, ...grouping.row };
   if (['shared', 'personal', 'private'].includes(visibility)) {
     patch.visibility = visibility;
     patch.share_with_family = visibility === 'personal' && form.get('share_with_family') === 'on';
   }
   const { error, count } = await supabase.from('objects').update(patch as never, { count: 'exact' }).eq('id', objectId);
-  if (error) return fail(error.message.includes('row-level') ? 'Only the creator and owner can make this private.' : 'Couldn’t save. Check the details.');
+  if (error) {
+    if (photo.path) await removePhoto(photo.path);
+    return fail(error.message.includes('row-level') ? 'Only the creator and owner can make this private.' : friendlyError(error.message));
+  }
   if (count === 0) return fail('You can’t change this one.');
+  if (oldPhoto && oldPhoto !== values.photo) await removePhoto(oldPhoto);
   done();
   return { ok: true, message: 'Details saved.' };
 }

@@ -4,9 +4,9 @@ import { loadWorld } from '@/lib/world';
 
 export const metadata = { title: 'Add · Stonebook' };
 
-export default async function Add({ searchParams }: { searchParams: Promise<{ type?: string; owner?: string }> }) {
+export default async function Add({ searchParams }: { searchParams: Promise<{ type?: string; owner?: string; parent?: string }> }) {
   const w = await loadWorld();
-  const { type: typeId, owner } = await searchParams;
+  const { type: typeId, owner, parent } = await searchParams;
   const type = w.types.find((t) => t.id === typeId);
 
   if (w.me.role === 'child') {
@@ -30,11 +30,12 @@ export default async function Add({ searchParams }: { searchParams: Promise<{ ty
     );
   }
 
+  const groups = w.objects.filter((o) => o.object_type_id === type.id && o.is_group && !o.archived_at).map((o) => ({ id: o.id, name: o.name }));
   const owners = w.me.role === 'parent' || type.assignable ? w.members : w.members.filter((m) => m.id === w.me.id);
   return (
     <main className="page">
       <Link href="/add" className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>Back</Link>
-      <h1>New {type.name.toLowerCase()}</h1>
+      <h1>{type.groups ? 'New animal or group' : `New ${type.name.toLowerCase()}`}</h1>
       <AddForm
         typeId={type.id}
         typeName={type.name}
@@ -45,6 +46,9 @@ export default async function Add({ searchParams }: { searchParams: Promise<{ ty
         isParent={w.me.role === 'parent'}
         today={w.today}
         initialOwner={owners.some((m) => m.id === owner) ? owner! : w.me.id}
+        grouped={type.groups}
+        groups={groups}
+        parentId={groups.some((g) => g.id === parent) ? parent! : null}
       />
     </main>
   );

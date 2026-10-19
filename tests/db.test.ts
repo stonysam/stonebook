@@ -42,11 +42,11 @@ async function as<T>(who: keyof typeof authId, fn: () => Promise<T>, email = `${
 const rows = async (q: string, params: unknown[] = []) => (await db.query<Record<string, unknown>>(q, params)).rows;
 const names = async (q: string, params: unknown[] = []) => (await rows(q, params)).map((r) => r.name).sort();
 
-async function addObject(o: { name: string; type: string; owner: string; visibility?: string; share?: boolean; fields?: object }) {
+async function addObject(o: { name: string; type: string; owner: string; visibility?: string; share?: boolean; fields?: object; group?: boolean; parent?: string }) {
   const r = await rows(
-    `insert into objects (object_type_id, name, owner_id, visibility, share_with_family, field_values)
-     values ($1, $2, $3, $4, $5, $6) returning id`,
-    [typeId[o.type], o.name, o.owner, o.visibility ?? 'shared', o.share ?? false, JSON.stringify(o.fields ?? {})]);
+    `insert into objects (object_type_id, name, owner_id, visibility, share_with_family, field_values, is_group, parent_id)
+     values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
+    [typeId[o.type], o.name, o.owner, o.visibility ?? 'shared', o.share ?? false, JSON.stringify(o.fields ?? {}), o.group ?? false, o.parent ?? null]);
   return r[0].id as string;
 }
 
@@ -232,6 +232,18 @@ describe('logging events', () => {
     await expect(as('crystal', () => db.query(
       `insert into events (object_id, kind, occurred_on, correction_of, created_by) values ($1, 'x', '2026-10-01', $2, $3)`,
       [crystalPassport, e.id, id.crystal]))).rejects.toThrow(/same object/);
+  });
+});
+
+describe('animals one by one, in groups', () => {
+  it('puts an animal in one group, never a group in a group or an animal in an animal', async () => {
+    const paddock = await as('sam', () => addObject({ name: 'Horses and Clyde', type: 'Animal or flock', owner: id.sam, group: true, fields: { species: ['Horse', 'Donkey'], head_count: 6 } }));
+    const clyde = await as('sam', () => addObject({ name: 'Clyde', type: 'Animal or flock', owner: id.sam, parent: paddock, fields: { species: ['Donkey'], birth_year: 2014 } }));
+    expect((await rows('select parent_id from objects where id = $1', [clyde]))[0].parent_id).toBe(paddock);
+    await expect(as('sam', () => addObject({ name: 'Foal', type: 'Animal or flock', owner: id.sam, parent: clyde, fields: { species: 'Horse' } }))).rejects.toThrow(/group of the same kind/);
+    await expect(as('sam', () => addObject({ name: 'Herd', type: 'Animal or flock', owner: id.sam, group: true, parent: paddock, fields: { species: 'Horse' } }))).rejects.toThrow(/group can't be part of another group/);
+    await expect(as('sam', () => addObject({ name: 'Tractor', type: 'Machine', owner: id.sam, parent: paddock }))).rejects.toThrow(/group of the same kind/);
+    await expect(as('sam', () => rows('update objects set is_group = false where id = $1', [paddock]))).rejects.toThrow(/still has members/);
   });
 });
 

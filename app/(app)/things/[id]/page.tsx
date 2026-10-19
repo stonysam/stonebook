@@ -5,6 +5,7 @@ import { Avatar, Avatars } from '@/components/avatar';
 import { AbortButton, DoneButton, LogButton } from '@/components/log-button';
 import { CompletionSwitch } from '@/components/item-tools';
 import { colorOf } from '@/lib/people';
+import { photoUrls } from '@/lib/photos';
 import { ChoreIcon } from '@/components/chore-icons';
 import { SessionCard } from '@/components/session-card';
 import { dateText, possessive, whenText, WEEKDAYS } from '@/lib/format';
@@ -27,7 +28,23 @@ export default async function ItemPage({ params, searchParams }: {
   const defs = w.fields.filter((f) => f.object_type_id === o.object_type_id);
   const values = (o.field_values ?? {}) as Record<string, unknown>;
   const rules = w.rules.filter((r) => r.object_id === o.id).map((r) => dueFor(w, r)).filter((d) => d !== null);
-  const history = eventsOf(w, o.id);
+  const grouped = !!type?.groups;
+  const inGroup = grouped && o.is_group ? w.objects.filter((x) => x.parent_id === o.id && !x.archived_at) : [];
+  const parent = o.parent_id ? w.objects.find((x) => x.id === o.parent_id) : undefined;
+  const groupOptions = grouped ? w.objects.filter((x) => x.object_type_id === o.object_type_id && x.is_group && !x.archived_at).map((x) => ({ id: x.id, name: x.name })) : [];
+  const photoOf = (x: typeof o) => ((x.field_values ?? {}) as Record<string, unknown>).photo as string | undefined;
+  const urls = grouped ? await photoUrls([photoOf(o), ...inGroup.map(photoOf)]) : {};
+  const photo = photoOf(o) ? urls[photoOf(o)!] : undefined;
+  const nameById = Object.fromEntries(inGroup.map((x) => [x.id, x.name]));
+  // A group's history includes its animals' entries, so the paddock's story is in one place.
+  const history = inGroup.length ? w.events.filter((e) => e.object_id === o.id || e.object_id in nameById) : eventsOf(w, o.id);
+  const thisYear = Number(w.today.slice(0, 4));
+  const bornText = (y: unknown) => {
+    const n = Number(y);
+    if (!Number.isFinite(n) || !n) return null;
+    const age = thisYear - n;
+    return age > 0 ? `${n} (${age} ${age === 1 ? 'year' : 'years'} old)` : String(n);
+  };
   const kinds = [...new Set(history.map((e) => e.kind))];
   const shown = kindFilter ? history.filter((e) => e.kind === kindFilter) : history;
   const waiting = w.pending.filter((p) => p.object_id === o.id);
@@ -56,7 +73,12 @@ export default async function ItemPage({ params, searchParams }: {
             <div className="small">
               {type?.name} · {o.visibility === 'shared' ? 'Shared' : o.visibility === 'personal' ? (o.share_with_family ? 'Personal, shared with family' : 'Personal') : 'Private'} · looked after by {owner}
             </div>
+            {photo && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={photo} alt={o.name} className="photo" style={{ width: 128, height: 128, margin: '8px 0' }} />
+            )}
             <h1>{o.name}</h1>
+            {parent && <Link href={`/things/${parent.id}`} className="small">Part of {parent.name}</Link>}
             {o.archived_at && <p className="badge badge-wait" style={{ marginTop: 8 }}>Archived</p>}
             {added && <p className="badge badge-done" style={{ marginTop: 8 }}>Added</p>}
           </header>
@@ -89,6 +111,7 @@ export default async function ItemPage({ params, searchParams }: {
               canPrivate={o.owner_id === w.me.id && o.created_by === w.me.id}
               defs={defs} values={values} members={w.members}
               ownerId={o.owner_id} meId={w.me.id} today={w.today} canRemind
+              grouped={grouped} groups={groupOptions} isGroup={o.is_group} parentId={o.parent_id} photoUrl={photo}
             />
           )}
 
@@ -110,6 +133,32 @@ export default async function ItemPage({ params, searchParams }: {
               {sessions.map((x) => (
                 <SessionCard key={`${x.slot.id}-${x.date}`} s={sessionView(w, x)} drivers={drivers} names={names} canChange={editable} showTitle={false} />
               ))}
+            </section>
+          )}
+
+          {grouped && o.is_group && (
+            <section className="stack" aria-label="In this group">
+              <h2 className="eyebrow">In this group{inGroup.length ? ` · ${inGroup.length}` : ''}</h2>
+              {inGroup.map((x) => {
+                const v = (x.field_values ?? {}) as Record<string, unknown>;
+                const url = photoOf(x) ? urls[photoOf(x)!] : undefined;
+                return (
+                  <Link key={x.id} href={`/things/${x.id}`} className="card card-link row" style={{ gap: 12 }}>
+                    {url
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={url} alt="" className="photo" style={{ width: 52, height: 52 }} />
+                      : <div className="photo photo-empty" style={{ width: 52, height: 52 }} aria-hidden />}
+                    <div className="stack" style={{ gap: 2 }}>
+                      <span className="item-title">{x.name}</span>
+                      <span className="small">{[Array.isArray(v.species) ? v.species.join(', ') : v.species, bornText(v.birth_year)].filter(Boolean).join(' · ')}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+              {inGroup.length === 0 && <div className="card small">No animals added one by one yet. Add any that need their own history, like vet visits.</div>}
+              {w.me.role !== 'child' && !o.archived_at && (
+                <Link href={`/add?type=${o.object_type_id}&parent=${o.id}`} className="btn dashed" style={{ justifyContent: 'flex-start' }}>+ Add an animal to {o.name}</Link>
+              )}
             </section>
           )}
 
@@ -141,8 +190,9 @@ export default async function ItemPage({ params, searchParams }: {
           <section className="stack" aria-label="Details">
             <h2 className="eyebrow">Details</h2>
             <div className="list">
-              {defs.map((d) => {
-                const v = d.key === 'picture' && values.picture ? <ChoreIcon name={String(values.picture)} size={28} /> : showValue(d.key, d.kind);
+              {defs.filter((d) => d.key !== 'photo' && !(grouped && (o.is_group ? d.key === 'birth_year' : d.key === 'head_count'))).map((d) => {
+                const v = d.key === 'picture' && values.picture ? <ChoreIcon name={String(values.picture)} size={28} />
+                  : d.key === 'birth_year' ? bornText(values.birth_year) : showValue(d.key, d.kind);
                 return (
                   <div key={d.id} className="list-item" style={{ justifyContent: 'space-between' }}>
                     <span className="muted">{d.label}</span>
@@ -175,7 +225,7 @@ export default async function ItemPage({ params, searchParams }: {
             {shown.map((e) => (
               <div key={e.id} className="card row" style={{ padding: '10px 6px 10px 16px' }}>
                 <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-                  <div className="item-title">{e.kind}</div>
+                  <div className="item-title">{e.object_id !== o.id ? `${nameById[e.object_id]}: ` : ''}{e.kind}</div>
                   {(e.note || e.meter_value != null) && (
                     <div style={{ fontSize: 14 }}>
                       {[e.meter_value != null ? `${e.meter_value.toLocaleString('en-GB')} ${e.meter_unit ?? ''}` : null, e.note].filter(Boolean).join(' · ')}
@@ -184,7 +234,7 @@ export default async function ItemPage({ params, searchParams }: {
                   <div className="small">{dateText(e.occurred_on, w.today)} · {memberName(w, e.created_by)}{e.correction_of ? ' · corrected' : ''}</div>
                 </div>
                 {w.me.role !== 'child' && !o.archived_at && (
-                  <FixEntry eventId={e.id} objectId={o.id} kind={e.kind} occurredOn={e.occurred_on} note={e.note}
+                  <FixEntry eventId={e.id} objectId={e.object_id} kind={e.kind} occurredOn={e.occurred_on} note={e.note}
                     meterValue={e.meter_value} meterUnit={e.meter_unit} today={w.today} />
                 )}
               </div>

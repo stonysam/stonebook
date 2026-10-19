@@ -38,6 +38,8 @@ join (values
   ('Animal or flock', 'species',       'Species',            'choice', '["Sheep","Goat","Chicken","Duck","Cattle","Horse","Donkey","Pig","Dog","Cat","Other"]', true, 10),
   ('Animal or flock', 'head_count',    'How many',           'number', null, false, 20),
   ('Animal or flock', 'vet',           'Vet',                'text',   null, false, 30),
+  ('Animal or flock', 'photo',         'Photo',              'text',   null, false, 5),
+  ('Animal or flock', 'birth_year',    'Year born',          'number', null, false, 15),
 
   ('Home system',     'location',      'Where it is',        'text',   null, false, 10),
   ('Home system',     'model',         'Model / part number','text',   null, false, 20),
@@ -68,3 +70,4 @@ on conflict (object_type_id, key) do nothing;
 -- An animal group can be several species (chickens and ducks; the horses and the donkey).
 update public.field_defs f set multiple = true from public.object_types t
  where t.id = f.object_type_id and t.name = 'Animal or flock' and f.key = 'species';
+update public.object_types set groups = true where name = 'Animal or flock';

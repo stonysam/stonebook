@@ -12,7 +12,7 @@ const member = (id: string, role: MemberRow['role']): MemberRow =>
   ({ id, display_name: id, role, email: null, auth_user_id: null, created_at: '2026-10-01T00:00:00Z', color: null });
 const object = (id: string, owner: string, extra: Partial<ObjectRow> = {}): ObjectRow => ({
   id, object_type_id: 't-' + (extra.name ?? 'thing'), name: id, owner_id: owner, visibility: 'shared', share_with_family: false,
-  field_values: {}, archived_at: null, created_by: owner, created_at: '2026-10-01T00:00:00Z', ...extra,
+  field_values: {}, archived_at: null, created_by: owner, created_at: '2026-10-01T00:00:00Z', is_group: false, parent_id: null, ...extra,
 });
 const rule = (id: string, objectId: string, extra: Partial<RuleRow>): RuleRow => ({
   id, object_id: objectId, name: 'Rule', kind: 'interval', event_kind: 'Done', every_months: null, every_days: null,
@@ -106,7 +106,7 @@ describe('turns (dishes on different days for different people)', () => {
 
   it('a person page lists only their turns', () => {
     const w = dishes([]);
-    w.types = [{ id: 't-thing', name: 'Chore or task', icon: null, sort_order: 0, confirm_kid_logs: true, assignable: true, created_at: '' }];
+    w.types = [{ id: 't-thing', name: 'Chore or task', icon: null, sort_order: 0, confirm_kid_logs: true, assignable: true, groups: false, created_at: '' }];
     expect(choresOf(w, 'marley').map((c) => c.rules.map((r) => r.id))).toEqual([['marley']]);
     expect(choresOf(w, 'sam').map((c) => c.object.id)).not.toContain('hens');
   });

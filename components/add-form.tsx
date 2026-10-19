@@ -5,12 +5,14 @@ import { createItem } from '@/app/actions';
 import type { FieldDefRow, MemberRow, Visibility } from '@/lib/database.types';
 import { isActivity, isChore, typeUi } from '@/lib/types';
 import { ActivityFields } from './activity-fields';
-import { FieldInput, VisibilityPicker } from './item-tools';
+import { DetailFields, VisibilityPicker, type GroupOption } from './item-tools';
 import { ScheduleFields } from './schedule-fields';
 
-export function AddForm({ typeId, typeName, defs, members, owners, meId, isParent, initialOwner, today }: {
+export function AddForm({ typeId, typeName, defs, members, owners, meId, isParent, initialOwner, today, grouped = false, groups = [], parentId = null }: {
   typeId: string; typeName: string; defs: FieldDefRow[]; members: MemberRow[]; owners: MemberRow[]; meId: string;
   isParent: boolean; initialOwner: string; today: string;
+  /** Animals: one or a group, and which group. */
+  grouped?: boolean; groups?: GroupOption[]; parentId?: string | null;
 }) {
   const [state, action, pending] = useActionState(createItem, null);
   const chore = isChore(typeName);
@@ -48,7 +50,7 @@ export function AddForm({ typeId, typeName, defs, members, owners, meId, isParen
         ? <><input type="hidden" name="visibility" value="shared" /><span className="small">Shared with the family, so everyone on it can see it.</span></>
         : <VisibilityPicker key={owner} initial={initialVis} canPrivate={owner === meId} />}
 
-      {defs.map((d) => <FieldInput key={d.id} def={d} value={null} members={members} />)}
+      <DetailFields defs={defs} values={{}} members={members} grouped={grouped} groups={groups} parentId={parentId} />
 
       {activity
         ? <ActivityFields members={members} meId={meId} owner={owner} today={today} onPeople={setPicked} canChoose={owners.map((m) => m.id)} />

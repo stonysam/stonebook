@@ -20,7 +20,7 @@ const UI: Record<string, TypeUi> = {
   Subscription: { placeholder: 'e.g. Netflix', ownerQuestion: 'Who looks after it?', dueQuestion: 'When does it renew?' },
   Vehicle: { placeholder: 'e.g. Kia', ownerQuestion: 'Who looks after it?' },
   Machine: { placeholder: 'e.g. Chainsaw', ownerQuestion: 'Who looks after it?' },
-  'Animal or flock': { placeholder: 'e.g. Sheep flock', ownerQuestion: 'Who looks after them?' },
+  'Animal or flock': { placeholder: 'e.g. Clyde, or The hens', ownerQuestion: 'Who looks after it?' },
   'Home system': { placeholder: 'e.g. Well water filter', ownerQuestion: 'Who looks after it?' },
   Person: { placeholder: 'e.g. Benji', ownerQuestion: 'Who looks after it?' },
 };
