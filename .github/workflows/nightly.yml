@@ -42,11 +42,34 @@ jobs:
           printf '%s' "$PASSPHRASE" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
             --symmetric --cipher-algo AES256 -o "$name" stonebook.sql
           shred -u stonebook.sql
-          echo "BACKUP_FILE=$name" >> "$GITHUB_ENV"
+          echo "BACKUP_DATE=$(date -u +%F)" >> "$GITHUB_ENV"
+
+      # Photos live in Supabase Storage, not the database. The S3 key reads every file
+      # (it bypasses the app's privacy rules), so it stays in GitHub secrets and is used only here.
+      - name: Copy and encrypt the photos
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: eu-central-1
+          PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "::warning::Photos not backed up: add the SUPABASE_S3_ACCESS_KEY_ID and SUPABASE_S3_SECRET_ACCESS_KEY secrets (see docs/backup-and-restore.md)"
+            exit 0
+          fi
+          aws configure set default.s3.addressing_style path
+          mkdir photos
+          aws s3 sync s3://photos photos --only-show-errors \
+            --endpoint-url https://qiddytmxiftsvmwoisuc.storage.supabase.co/storage/v1/s3
+          echo "Photos: $(find photos -type f | wc -l)"
+          name="stonebook-photos-$BACKUP_DATE.tar.gpg"
+          tar -cf - photos | gpg --batch --yes --pinentry-mode loopback --passphrase-file <(printf '%s' "$PASSPHRASE") \
+            --symmetric --cipher-algo AES256 -o "$name"
+          rm -rf photos
 
       - uses: actions/upload-artifact@v6
         with:
-          name: ${{ env.BACKUP_FILE }}
-          path: ${{ env.BACKUP_FILE }}
+          name: stonebook-${{ env.BACKUP_DATE }}
+          path: stonebook-*.gpg
           retention-days: 30
           if-no-files-found: error
