@@ -20,7 +20,7 @@ export interface PEvent {
   data: unknown; created_by: string | null; created_at: string; rule_id: string | null;
 }
 export interface PSlot {
-  id: string; object_id: string; weekdays: number[]; starts_at: string; ends_at: string | null;
+  id: string; object_id: string; weekdays: number[]; starts_at: string | null; ends_at: string | null;
   drop_off_by: string | null; pick_up_by: string | null; active: boolean;
   /** A one-off on this date (the dentist), or null for every week on its weekdays. */
   on_date?: string | null;
@@ -85,7 +85,9 @@ export function recipientsOf(d: PlanData, rule: PRule): string[] {
 }
 
 export interface Session {
-  slotId: string; objectId: string; date: string; startsAt: string; endsAt: string | null;
+  slotId: string; objectId: string; date: string;
+  /** HH:MM, or null when no time is set (it shows for the whole day). */
+  startsAt: string | null; endsAt: string | null;
   dropOffBy: string | null; pickUpBy: string | null; cancelled: boolean; changed: boolean; note: string | null;
   /** Who's going. */
   people: string[];
@@ -101,13 +103,13 @@ export function sessionsOn(d: PlanData, date: string, objectId?: string): Sessio
       if (!object || object.archived_at) return [];
       const c = d.changes.find((x) => x.slot_id === slot.id && x.on_date === date);
       return [{
-        slotId: slot.id, objectId: object.id, date, startsAt: slot.starts_at.slice(0, 5), endsAt: slot.ends_at?.slice(0, 5) ?? null,
+        slotId: slot.id, objectId: object.id, date, startsAt: slot.starts_at?.slice(0, 5) ?? null, endsAt: slot.starts_at ? (slot.ends_at?.slice(0, 5) ?? null) : null,
         dropOffBy: c ? c.drop_off_by : slot.drop_off_by, pickUpBy: c ? c.pick_up_by : slot.pick_up_by,
         cancelled: c?.cancelled ?? false, changed: !!c, note: c?.note ?? null,
         people: slot.people?.length ? slot.people : [object.owner_id],
       }];
     })
-    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    .sort((a, b) => (a.startsAt ?? '').localeCompare(b.startsAt ?? ''));
 }
 
 // ---------------------------------------------------------------------------
@@ -165,12 +167,12 @@ export function morningSummary(d: PlanData, memberId: string, today: string): No
   const plans = sessionsOn(d, today).filter((s) => !s.cancelled).flatMap((s) => {
     const object = objectOf(d, s.objectId)!;
     const mine = s.people.includes(memberId);
-    const lifts = [s.dropOffBy === memberId ? `drop-off ${s.startsAt}` : null, s.pickUpBy === memberId && s.endsAt ? `pick-up ${s.endsAt}` : null,
+    const lifts = [s.dropOffBy === memberId ? (s.startsAt ? `drop-off ${s.startsAt}` : 'drop-off') : null, s.pickUpBy === memberId && s.endsAt ? `pick-up ${s.endsAt}` : null,
       s.pickUpBy === memberId && !s.endsAt ? 'pick-up' : null].filter(Boolean);
     if (!mine && lifts.length === 0) return [];
     const others = namesOf(d, s.people, memberId);
     const who = others ? ` (${mine ? `with ${others}` : others})` : '';
-    return [`${s.startsAt} ${object.name}${who}${lifts.length ? `, you do ${lifts.join(' and ')}` : ''}`];
+    return [`${s.startsAt ? `${s.startsAt} ` : ''}${object.name}${who}${lifts.length ? `, you do ${lifts.join(' and ')}` : ''}`];
   });
 
   const lines = [...overdue, ...today_, ...plans, ...soon];
@@ -269,8 +271,10 @@ export function calendarFor(d: PlanData, memberId: string, today: string): Calen
       out.push({
         uid: `slot-${s.slotId}-${day}`,
         title: `${object.name}${who}${drives.length && !mine ? `: you do ${drives.join(' and ')}` : ''}`,
-        start: { date: day, time: s.startsAt },
-        end: { date: day, time: s.endsAt ?? `${String(Math.min(23, Number(s.startsAt.slice(0, 2)) + 1)).padStart(2, '0')}:${s.startsAt.slice(3)}` },
+        ...(s.startsAt
+          ? { start: { date: day, time: s.startsAt },
+              end: { date: day, time: s.endsAt ?? `${String(Math.min(23, Number(s.startsAt.slice(0, 2)) + 1)).padStart(2, '0')}:${s.startsAt.slice(3)}` } }
+          : { date: day }),
         description: [driving, s.note].filter(Boolean).join('. ') || undefined,
         url: `/things/${object.id}`,
       });

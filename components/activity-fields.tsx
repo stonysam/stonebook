@@ -51,7 +51,7 @@ export function ActivityFields({ members, meId, owner, today, onPeople, canChoos
         <label className="field">Date<input type="date" name="slot_date" min={today} required /></label>
       )}
       <div className="row">
-        <label className="field" style={{ flex: '1 1 0' }}>Starts<input type="time" name="starts_at" required step={300} /></label>
+        <label className="field" style={{ flex: '1 1 0' }}>Starts (optional)<input type="time" name="starts_at" step={300} /></label>
         <label className="field" style={{ flex: '1 1 0' }}>Ends (optional)<input type="time" name="ends_at" step={300} /></label>
       </div>
 

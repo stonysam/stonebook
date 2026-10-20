@@ -21,7 +21,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   const activities = w.objects.filter((o) => !o.archived_at && isActivity(typeOf(w, o)?.name)
     && (o.owner_id === person.id || w.slots.some((x) => x.object_id === o.id && x.people.includes(person.id))));
   const others = owned.filter((o) => !typeOf(w, o)?.assignable && !isActivity(typeOf(w, o)?.name));
-  const sessions = activities.flatMap((o) => upcomingSessions(w, o.id, 7)).sort((a, b) => (a.date + a.startsAt).localeCompare(b.date + b.startsAt));
+  const sessions = activities.flatMap((o) => upcomingSessions(w, o.id, 7)).sort((a, b) => (a.date + (a.startsAt ?? '')).localeCompare(b.date + (b.startsAt ?? '')));
   const sessionsMine = sessions.filter((x) => x.people.includes(person.id));
   const lifts = w.objects.filter((o) => !o.archived_at)
     .flatMap((o) => upcomingSessions(w, o.id, 7)).filter((s) => !s.cancelled && !s.people.includes(person.id) && (s.dropOffBy === person.id || s.pickUpBy === person.id));
@@ -94,7 +94,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
             <strong>Lifts {isMe ? 'you give' : `${person.display_name} gives`} this week</strong>
             {lifts.map((x) => (
               <span key={`${x.slot.id}-${x.date}`} style={{ fontSize: 14 }}>
-                {sessionView(w, x).dateLabel} {x.startsAt}: {[x.dropOffBy === person.id ? 'drop-off' : null, x.pickUpBy === person.id ? 'pick-up' : null].filter(Boolean).join(' and ')} for {names[x.object.owner_id]} ({x.object.name})
+                {sessionView(w, x).dateLabel}{x.startsAt ? ` ${x.startsAt}` : ''}: {[x.dropOffBy === person.id ? 'drop-off' : null, x.pickUpBy === person.id ? 'pick-up' : null].filter(Boolean).join(' and ')} for {names[x.object.owner_id]} ({x.object.name})
               </span>
             ))}
           </div>

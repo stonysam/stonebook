@@ -145,4 +145,17 @@ describe('one-off appointments for several people', () => {
     expect(liftNotices(d, 'crystal', '2026-10-23', 14 * 60 + 20)[0].title).toBe('Drop Sam, Lucy and Benji at Dentist by 15:00');
     expect(calendarFor(d, 'benji', '2026-10-20').filter((e) => e.uid.startsWith('slot-dn'))).toHaveLength(1);
   });
+
+  it('an appointment with no time set shows all day, without a lift heads-up', () => {
+    const d = data();
+    d.objects.push(obj('fair', 'School fair', 'crystal', 'crystal'));
+    d.slots.push({ id: 'sf', object_id: 'fair', weekdays: [5], starts_at: null, ends_at: null, drop_off_by: 'crystal',
+      pick_up_by: null, active: true, on_date: '2026-10-23', people: ['lucy'] });
+    expect(morningSummary(d, 'lucy', '2026-10-23')!.body).toBe('School fair');
+    expect(morningSummary(d, 'crystal', '2026-10-23')!.body).toBe('School fair (Lucy), you do drop-off');
+    expect(liftNotices(d, 'crystal', '2026-10-23', 9 * 60)).toHaveLength(0);
+    const entry = calendarFor(d, 'lucy', '2026-10-20').find((e) => e.uid.startsWith('slot-sf'))!;
+    expect(entry.date).toBe('2026-10-23');
+    expect(entry.start).toBeUndefined();
+  });
 });

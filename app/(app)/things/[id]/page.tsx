@@ -71,7 +71,7 @@ export default async function ItemPage({ params, searchParams }: {
           <Link href="/things" className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>Back to Things</Link>
           <header>
             <div className="small">
-              {type?.name} · {o.visibility === 'shared' ? 'Shared' : o.visibility === 'personal' ? (o.share_with_family ? 'Personal, shared with family' : 'Personal') : 'Private'} · looked after by {owner}
+              {type?.name} · {o.visibility === 'shared' ? 'Shared' : o.visibility === 'personal' ? 'Personal' : 'Private'} · looked after by {owner}
             </div>
             {photo && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -107,7 +107,7 @@ export default async function ItemPage({ params, searchParams }: {
           {editable && (
             <ItemActions
               objectId={o.id} name={o.name} typeName={type?.name ?? ''} archived={!!o.archived_at}
-              visibility={o.visibility} shareWithFamily={o.share_with_family}
+              visibility={o.visibility}
               canPrivate={o.owner_id === w.me.id && o.created_by === w.me.id}
               defs={defs} values={values} members={w.members}
               ownerId={o.owner_id} meId={w.me.id} today={w.today} canRemind
@@ -121,7 +121,7 @@ export default async function ItemPage({ params, searchParams }: {
               {slots.length === 0 && <div className="card small">No times yet. {editable ? 'Add them with “Add times” above.' : ''}</div>}
               {slots.map((x) => (
                 <div key={x.id} className="card stack" style={{ gap: 4 }}>
-                  <strong>{x.on_date ? dateText(x.on_date, w.today) : `Every ${days(x.weekdays)}`}, {x.starts_at.slice(0, 5)}{x.ends_at ? `–${x.ends_at.slice(0, 5)}` : ''}</strong>
+                  <strong>{x.on_date ? dateText(x.on_date, w.today) : `Every ${days(x.weekdays)}`}{x.starts_at ? `, ${x.starts_at.slice(0, 5)}${x.ends_at ? `–${x.ends_at.slice(0, 5)}` : ''}` : ', any time'}</strong>
                   {x.people.length > 0 && <span className="row" style={{ gap: 8 }}><Avatars members={w.members} ids={x.people} /><span className="small">{x.people.map((id) => memberName(w, id)).join(', ')}</span></span>}
                   <span className="muted" style={{ fontSize: 14 }}>
                     {[x.drop_off_by ? `Drop-off: ${names[x.drop_off_by]}` : null, x.pick_up_by ? `Pick-up: ${names[x.pick_up_by]}` : null].filter(Boolean).join(' · ') || 'No lift needed'}
@@ -196,7 +196,7 @@ export default async function ItemPage({ params, searchParams }: {
                 return (
                   <div key={d.id} className="list-item" style={{ justifyContent: 'space-between' }}>
                     <span className="muted">{d.label}</span>
-                    <span style={{ textAlign: 'right' }}>{v ?? <span className="small">Not set</span>}</span>
+                    <span style={{ textAlign: 'right', whiteSpace: 'pre-wrap' }}>{v ?? <span className="small">Not set</span>}</span>
                   </div>
                 );
               })}

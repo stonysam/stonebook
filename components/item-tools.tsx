@@ -16,6 +16,13 @@ export function FieldInput({ def, value, members, photoUrl }: { def: FieldDefRow
   const label = `${def.label}${def.required ? '' : ' (optional)'}`;
   if (def.key === 'picture') return <PicturePicker name={name} initial={v} label={label} />;
   if (def.key === 'photo') return <PhotoInput current={v} currentUrl={photoUrl} label={label} />;
+  if (def.kind === 'text' && ['description', 'instructions', 'notes'].includes(def.key)) {
+    return (
+      <label className="field">{label}
+        <textarea name={name} defaultValue={v} required={def.required} rows={3} maxLength={300} />
+      </label>
+    );
+  }
   if (def.key === 'birth_year') {
     return (
       <label className="field">{label}
@@ -88,11 +95,11 @@ function PicturePicker({ name, initial, label }: { name: string; initial: string
   );
 }
 
-export function VisibilityPicker({ initial, canPrivate, initialShare = false }: { initial: Visibility; canPrivate: boolean; initialShare?: boolean }) {
+export function VisibilityPicker({ initial, canPrivate }: { initial: Visibility; canPrivate: boolean }) {
   const [vis, setVis] = useState<Visibility>(initial);
   const help: Record<Visibility, string> = {
     shared: 'The whole family sees it.',
-    personal: 'The owner and both parents see it.',
+    personal: 'The owner and Mum and Dad see it.',
     private: 'Only the owner sees it. Not even Mum and Dad.',
   };
   return (
@@ -107,12 +114,6 @@ export function VisibilityPicker({ initial, canPrivate, initialShare = false }: 
         ))}
       </div>
       <span className="small">{help[vis]}{!canPrivate ? ' Only someone adding a thing for themselves can make it private.' : ''}</span>
-      {vis === 'personal' && (
-        <label className="row" style={{ minHeight: 44 }}>
-          <input type="checkbox" name="share_with_family" defaultChecked={initialShare} style={{ width: 22, minHeight: 22 }} />
-          <span>Share with the whole family</span>
-        </label>
-      )}
     </fieldset>
   );
 }
@@ -127,7 +128,7 @@ function useResultToast(state: ActionResult | null, onOk?: () => void) {
 }
 
 export function ItemActions(props: {
-  objectId: string; name: string; typeName: string; archived: boolean; visibility: Visibility; shareWithFamily: boolean;
+  objectId: string; name: string; typeName: string; archived: boolean; visibility: Visibility;
   canPrivate: boolean; defs: FieldDefRow[]; values: Record<string, unknown>; members: MemberRow[];
   ownerId: string; meId: string; today: string; canRemind: boolean;
   grouped?: boolean; groups?: GroupOption[]; isGroup?: boolean; parentId?: string | null; photoUrl?: string | null;
@@ -164,7 +165,7 @@ export function ItemActions(props: {
           <label className="field">Name<input name="name" defaultValue={props.name} required maxLength={120} /></label>
           <DetailFields defs={props.defs} values={props.values} members={props.members} grouped={!!props.grouped} groups={props.groups}
             isGroup={props.isGroup} parentId={props.parentId} selfId={props.objectId} photoUrl={props.photoUrl} />
-          <VisibilityPicker initial={props.visibility} canPrivate={props.canPrivate} initialShare={props.shareWithFamily} />
+          <VisibilityPicker initial={props.visibility} canPrivate={props.canPrivate} />
           {editState && !editState.ok && <p role="alert" style={{ margin: 0, fontWeight: 600 }}>{editState.error}</p>}
           <button className="btn btn-primary" disabled={editing}>{editing ? 'Saving…' : 'Save details'}</button>
         </form>

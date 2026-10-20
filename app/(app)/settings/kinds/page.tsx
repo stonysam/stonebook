@@ -1,5 +1,6 @@
 import Link from '@/components/link';
 import { MoveButtons, NewKindForm } from '@/components/kinds-editor';
+import { KindIcon } from '@/components/kind-icon';
 import { loadWorld } from '@/lib/world';
 
 export const metadata = { title: 'Kinds of things · Stonebook' };
@@ -19,7 +20,8 @@ export default async function Kinds() {
           const things = w.objects.filter((o) => o.object_type_id === t.id).length;
           const details = w.fields.filter((f) => f.object_type_id === t.id).length;
           return (
-            <div key={t.id} className="card row" style={{ gap: 8 }}>
+            <div key={t.id} className="card row" style={{ gap: 12 }}>
+              <KindIcon name={t.icon} size={24} />
               <Link href={`/settings/kinds/${t.id}`} className="stack" style={{ gap: 2, flex: '1 1 auto', minWidth: 0, textDecoration: 'none', color: 'inherit' }}>
                 <span className="item-title">{t.name}{t.hidden ? <span className="badge badge-wait" style={{ marginLeft: 8 }}>Hidden</span> : null}</span>
                 <span className="small">{details} {details === 1 ? 'detail' : 'details'} · {things} {things === 1 ? 'thing' : 'things'}</span>

@@ -1,7 +1,8 @@
 'use client';
 
 import { useActionState, useEffect, useState, useTransition } from 'react';
-import { addField, createKind, fieldUsage, move, removeField, removeKind, renameKind, setKindHidden, updateField } from '@/app/kinds-actions';
+import { addField, createKind, fieldUsage, move, removeField, removeKind, renameKind, setKindHidden, setKindIcon, updateField } from '@/app/kinds-actions';
+import { KIND_ICONS, KindIcon } from './kind-icon';
 import type { ActionResult } from '@/app/actions';
 import { FIELD_KINDS, type FieldKindChoice } from '@/lib/types';
 import { useToast } from './toast';
@@ -50,6 +51,26 @@ export function NewKindForm() {
       {state && !state.ok && <p role="alert" style={{ margin: 0, fontWeight: 600 }}>{state.error}</p>}
       <button className="btn btn-primary" disabled={pending}>{pending ? 'Adding…' : 'Add it'}</button>
     </form>
+  );
+}
+
+export function IconPicker({ id, icon }: { id: string; icon: string | null }) {
+  const { run, busy, node } = useAct();
+  const [pick, setPick] = useState(icon ?? 'box');
+  return (
+    <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
+      <legend className="small" style={{ marginBottom: 8 }}>Icon on the Add page</legend>
+      <div className="wrap" style={{ gap: 6 }}>
+        {Object.keys(KIND_ICONS).map((k) => (
+          <button key={k} type="button" className="day" aria-pressed={pick === k} aria-label={k} disabled={busy}
+            style={{ width: 48, height: 48, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={() => { setPick(k); run(() => setKindIcon(id, k)); }}>
+            <KindIcon name={k} size={24} />
+          </button>
+        ))}
+      </div>
+      {node}
+    </fieldset>
   );
 }
 

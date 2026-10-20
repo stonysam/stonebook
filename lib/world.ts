@@ -144,7 +144,7 @@ export interface Session {
   slot: ActivitySlotRow;
   object: ObjectRow;
   date: string;
-  startsAt: string; // HH:MM
+  startsAt: string | null; // HH:MM, or null: no set time
   endsAt: string | null;
   dropOffBy: string | null;
   pickUpBy: string | null;
@@ -179,7 +179,7 @@ export function sessionView(w: World, s: Session) {
   return {
     slotId: s.slot.id, objectId: s.object.id, title: s.object.name, who: plan.namesOf(planData(w), s.people) || memberName(w, s.object.owner_id),
     people: s.people, color: colorOf(w.members, s.people[0]),
-    date: s.date, dateLabel: dayLabel(s.date, w.today), time: s.endsAt ? `${s.startsAt}–${s.endsAt}` : s.startsAt,
+    date: s.date, dateLabel: dayLabel(s.date, w.today), time: !s.startsAt ? 'Any time' : s.endsAt ? `${s.startsAt}–${s.endsAt}` : s.startsAt,
     dropOffBy: s.dropOffBy, pickUpBy: s.pickUpBy, cancelled: s.cancelled, changed: s.changed, note: s.note,
   };
 }

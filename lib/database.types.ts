@@ -33,7 +33,7 @@ export type RuleRow = {
   completion: 'done' | 'log';
 };
 export type ActivitySlotRow = {
-  id: string; object_id: string; weekdays: number[]; starts_at: string; ends_at: string | null;
+  id: string; object_id: string; weekdays: number[]; starts_at: string | null; ends_at: string | null;
   drop_off_by: string | null; pick_up_by: string | null; active: boolean; created_by: string | null; created_at: string;
   on_date: string | null; people: string[];
 };

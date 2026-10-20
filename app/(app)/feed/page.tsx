@@ -28,6 +28,7 @@ export default async function Feed() {
           {i === firstOld && i > 0 && <div className="small" style={{ textAlign: 'center' }}>Seen before</div>}
           <FeedItem
             rootId={f.id}
+            href={`/things/${f.object_id}`}
             who={name(f.created_by)}
             initial={name(f.created_by)[0]}
             title={f.object_name}

@@ -2,6 +2,7 @@
 
 import { useEffect, useOptimistic, useState, useTransition } from 'react';
 import { markFeedSeen, toggleReaction } from '@/app/actions';
+import Link from './link';
 
 const REACTIONS: [string, string, string][] = [
   ['clap', '\u{1F44F}', 'Clap'], ['fire', '\u{1F525}', 'Fire'], ['heart', '\u{2764}\u{FE0F}', 'Heart'],
@@ -15,8 +16,8 @@ export function MarkSeen() {
   return null;
 }
 
-export function FeedItem({ rootId, who, initial, title, line, reactions, canReact }: {
-  rootId: string; who: string; initial: string; title: string; line: string; reactions: Reaction[]; canReact: boolean;
+export function FeedItem({ rootId, href, who, initial, title, line, reactions, canReact }: {
+  rootId: string; href: string; who: string; initial: string; title: string; line: string; reactions: Reaction[]; canReact: boolean;
 }) {
   const [optimistic, apply] = useOptimistic(reactions, (cur: Reaction[], change: { emoji: string; on: boolean }) =>
     change.on ? [...cur, { emoji: change.emoji, mine: true, who: 'You' }] : cur.filter((r) => !(r.mine && r.emoji === change.emoji)));
@@ -36,13 +37,14 @@ export function FeedItem({ rootId, who, initial, title, line, reactions, canReac
 
   return (
     <article className="card stack" style={{ gap: 12 }}>
-      <div className="row" style={{ alignItems: 'flex-start' }}>
+      <Link href={href} className="row feed-link" style={{ alignItems: 'flex-start', textDecoration: 'none', color: 'inherit' }}>
         <span aria-hidden="true" style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 20, background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{initial}</span>
         <div style={{ flex: '1 1 auto', minWidth: 0 }}>
           <div><strong>{who}</strong>: {title}</div>
           <div className="small">{line}</div>
         </div>
-      </div>
+        <span aria-hidden="true" className="muted" style={{ alignSelf: 'center', fontSize: 20 }}>›</span>
+      </Link>
       <div className="wrap">
         {counts.map((c) => (
           <button key={c.key} type="button" className="chip" aria-pressed={c.mine} disabled={!canReact} onClick={() => toggle(c.key)}

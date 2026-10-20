@@ -1,6 +1,8 @@
 import Link from '@/components/link';
 import { AddForm } from '@/components/add-form';
+import { KindIcon } from '@/components/kind-icon';
 import { loadWorld } from '@/lib/world';
+import { isActivity } from '@/lib/types';
 
 export const metadata = { title: 'Add · Stonebook' };
 
@@ -20,7 +22,8 @@ export default async function Add({ searchParams }: { searchParams: Promise<{ ty
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))', gap: 10 }}>
           {w.types.filter((t) => !t.hidden).map((t) => (
             <Link key={t.id} href={`/add?type=${t.id}${owner ? `&owner=${owner}` : ''}`} className="card"
-              style={{ minHeight: 88, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', textDecoration: 'none', color: 'inherit', fontWeight: 500 }}>
+              style={{ minHeight: 104, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', justifyContent: 'center', textAlign: 'center', textDecoration: 'none', color: 'inherit', fontWeight: 500 }}>
+              <KindIcon name={t.icon} />
               {t.name}
             </Link>
           ))}
@@ -35,7 +38,7 @@ export default async function Add({ searchParams }: { searchParams: Promise<{ ty
   return (
     <main className="page">
       <Link href="/add" className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>Back</Link>
-      <h1>{type.groups ? 'New animal or group' : `New ${type.name.toLowerCase()}`}</h1>
+      <h1>{type.groups ? 'New animal or group' : isActivity(type.name) ? 'New activity' : `New ${type.name.toLowerCase()}`}</h1>
       <AddForm
         typeId={type.id}
         typeName={type.name}

@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from '@/components/link';
-import { AddFieldForm, FieldRow, KindControls } from '@/components/kinds-editor';
+import { AddFieldForm, FieldRow, IconPicker, KindControls } from '@/components/kinds-editor';
 import { FIELD_KINDS, isBuiltInKind, isLockedField } from '@/lib/types';
 import { loadWorld } from '@/lib/world';
 
@@ -27,6 +27,7 @@ export default async function Kind({ params }: { params: Promise<{ id: string }>
         <h1>{type.name}</h1>
       </header>
       <KindControls id={type.id} name={type.name} builtIn={isBuiltInKind(type.name)} hidden={type.hidden} />
+      <IconPicker id={type.id} icon={type.icon} />
 
       <section className="stack" aria-label="Details">
         <h2 className="eyebrow">Details · asked when adding, in this order</h2>

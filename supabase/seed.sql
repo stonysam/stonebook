@@ -62,7 +62,7 @@ join (values
   ('Chore or task',   'instructions',  'How to do it',       'text',   null, false, 10),
 
   ('Activity or work','place',         'Where',              'text',   null, false, 10),
-  ('Activity or work','contact',       'Contact (leader, coach, manager)', 'text', null, false, 20)
+  ('Activity or work','description',   'Description',        'text',   null, false, 20)
 ) as f(type_name, key, label, kind, options, required, sort_order)
   on f.type_name = t.name
 on conflict (object_type_id, key) do nothing;

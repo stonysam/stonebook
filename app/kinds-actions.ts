@@ -36,7 +36,7 @@ export async function createKind(_prev: ActionResult | null, form: FormData): Pr
   const name = sentence(clean(form.get('name'), 40));
   if (!name) return fail('Give it a name, like Cabin or Bike.');
   const { data: last } = await supabase.from('object_types').select('sort_order').order('sort_order', { ascending: false }).limit(1).maybeSingle();
-  const { data, error } = await supabase.from('object_types').insert({ name, sort_order: (last?.sort_order ?? 0) + 10 }).select('id').single();
+  const { data, error } = await supabase.from('object_types').insert({ name, icon: 'box', sort_order: (last?.sort_order ?? 0) + 10 }).select('id').single();
   if (error) return fail(error.code === '23505' ? 'There’s already a kind with that name.' : 'Couldn’t add it.');
   done();
   redirect(`/settings/kinds/${data.id}`);
@@ -53,6 +53,15 @@ export async function renameKind(typeId: string, newName: string): Promise<Actio
   if (error) return fail(error.code === '23505' ? 'There’s already a kind with that name.' : 'Couldn’t rename it.');
   done();
   return { ok: true, message: 'Renamed.' };
+}
+
+export async function setKindIcon(typeId: string, icon: string): Promise<ActionResult> {
+  const { supabase } = await asParent();
+  if (!/^[a-z-]{2,20}$/.test(icon)) return fail('Pick an icon.');
+  const { error } = await supabase.from('object_types').update({ icon }).eq('id', typeId);
+  if (error) return fail('Couldn’t change it.');
+  done();
+  return { ok: true };
 }
 
 export async function setKindHidden(typeId: string, hidden: boolean): Promise<ActionResult> {

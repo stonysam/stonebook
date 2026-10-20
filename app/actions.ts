@@ -226,11 +226,12 @@ function slotFromForm(form: FormData, objectId: string): { row?: Record<string, 
   const starts = clean(form.get('starts_at'), 5);
   const ends = clean(form.get('ends_at'), 5);
   const time = /^([01]\d|2[0-3]):[0-5]\d$/;
-  if (days.length === 0 && !starts) return {};
+  if (days.length === 0 && !starts && !once) return {};
   if (days.length === 0) return { error: 'Pick the day or days.' };
-  if (!time.test(starts)) return { error: 'Say what time it starts.' };
+  if (starts && !time.test(starts)) return { error: 'That start time doesn’t look right.' };
+  if (ends && !starts) return { error: 'Add a start time too, or leave the end empty.' };
   if (ends && (!time.test(ends) || ends <= starts)) return { error: 'The end time should be after the start.' };
-  return { row: { object_id: objectId, weekdays: days, on_date: once ? onDate : null, people, starts_at: starts, ends_at: ends || null,
+  return { row: { object_id: objectId, weekdays: days, on_date: once ? onDate : null, people, starts_at: starts || null, ends_at: ends || null,
     drop_off_by: clean(form.get('drop_off_by'), 40) || null, pick_up_by: clean(form.get('pick_up_by'), 40) || null } };
 }
 
@@ -261,7 +262,7 @@ export async function createItem(_prev: ActionResult | null, form: FormData): Pr
 
   const { error } = await supabase.from('objects').insert({
     id: objectId, object_type_id: typeId, name, owner_id: ownerId, visibility,
-    share_with_family: visibility === 'personal' && form.get('share_with_family') === 'on',
+    share_with_family: false,
     field_values: keepOwnPhoto(fieldValues(form, await fieldKeys(typeId)), objectId),
     ...grouping.row,
   });
@@ -302,7 +303,7 @@ export async function updateDetails(_prev: ActionResult | null, form: FormData):
   const patch: Record<string, unknown> = { name, field_values: values, ...grouping.row };
   if (['shared', 'personal', 'private'].includes(visibility)) {
     patch.visibility = visibility;
-    patch.share_with_family = visibility === 'personal' && form.get('share_with_family') === 'on';
+    patch.share_with_family = false; // Personal means the owner and parents; Shared is the whole family
   }
   const { error, count } = await supabase.from('objects').update(patch as never, { count: 'exact' }).eq('id', objectId);
   if (error) {
