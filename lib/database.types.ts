@@ -73,6 +73,7 @@ export type Database = {
       confirmations: Table<ConfirmationRow, Opt<ConfirmationRow, 'decided_at' | 'note'>>;
       reactions: Table<ReactionRow, Opt<ReactionRow, 'created_at'>>;
       feed_seen: Table<FeedSeenRow, Opt<FeedSeenRow, 'seen_at'>>;
+      whats_new_seen: Table<{ member_id: string; note_id: string; seen_at: string }, { member_id: string; note_id: string; seen_at?: string }>;
     };
     Views: {
       effective_events: View<EventRow>;

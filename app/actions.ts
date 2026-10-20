@@ -538,3 +538,10 @@ export async function setMemberColor(memberId: string, color: string): Promise<A
   done();
   return { ok: true };
 }
+
+/** Remembers which "What's new" notes this person has seen (once, on any device). */
+export async function markNotesSeen(ids: string[]): Promise<void> {
+  const { supabase, me } = await getMe();
+  const rows = ids.filter((id) => /^[a-z0-9-]{3,60}$/.test(id)).slice(0, 20).map((note_id) => ({ member_id: me.id, note_id }));
+  if (rows.length) await supabase.from('whats_new_seen').upsert(rows, { onConflict: 'member_id,note_id', ignoreDuplicates: true });
+}

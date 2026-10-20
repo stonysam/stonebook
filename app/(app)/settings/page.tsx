@@ -32,6 +32,10 @@ export default async function Settings() {
             </p>
           )}
           <CalendarLink url={link ? `${origin}/cal/${link.token}.ics` : null} />
+          <Link href="/settings/whats-new" className="card card-link">
+            <span className="item-title">What’s new</span>
+            <span className="small">Every change to Stonebook, newest first.</span>
+          </Link>
           {me.role === 'parent' && (
             <Link href="/settings/kinds" className="card card-link">
               <span className="item-title">Kinds of things</span>
