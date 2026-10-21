@@ -58,9 +58,9 @@
 .pc-clay  { --pc: #fce1ee; --pt: #1e2a21; --pl: #ec8fbb; }  /* Ziah: pale pink; a deeper pink edge so it shows on white cards */
 .pc-hay   { --pc: #e3b200; --pt: #1e2a21; --pl: #e3b200; }  /* Marley: yellow takes dark lettering */
 .pc-plum  { --pc: #a143e8; --pt: #fff;    --pl: #a143e8; }  /* Lucy */
-.pc-rose  { --pc: #db7d02; --pt: #1e2a21; --pl: #db7d02; }  /* Benji: orange takes dark lettering */
+.pc-rose  { --pc: #d60000; --pt: #fff;    --pl: #d60000; }  /* Benji */
 .pc-slate { --pc: #4d5e6e; --pt: #fff;    --pl: #4d5e6e; }
 .pc-teal  { --pc: #21756c; --pt: #fff;    --pl: #21756c; }
 @media (prefers-color-scheme: dark) {
-  .pc-sky { --pl: #5c93f5; } .pc-moss { --pl: #2fb35a; } .pc-clay { --pl: #fce1ee; } .pc-slate { --pl: #8597a9; } .pc-teal { --pl: #4fa69b; }
+  .pc-sky { --pl: #5c93f5; } .pc-moss { --pl: #2fb35a; } .pc-clay { --pl: #fce1ee; } .pc-rose { --pl: #f03a3a; } .pc-slate { --pl: #8597a9; } .pc-teal { --pl: #4fa69b; }
 }
