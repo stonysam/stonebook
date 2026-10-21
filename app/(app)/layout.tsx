@@ -1,6 +1,7 @@
 import { Nav } from '@/components/nav';
 import { getMe } from '@/lib/auth';
 import { WhatsNew } from '@/components/whats-new';
+import { CelebrationHost } from '@/components/hearts';
 import { unseenNotes } from '@/lib/whats-new';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {children}
       <Nav feedCount={feedCount} showFamily />
       <WhatsNew notes={notes} />
+      <CelebrationHost />
     </div>
   );
 }

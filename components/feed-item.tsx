@@ -3,6 +3,7 @@
 import { useEffect, useOptimistic, useState, useTransition } from 'react';
 import { markFeedSeen, toggleReaction } from '@/app/actions';
 import Link from './link';
+import { KindIcon } from './kind-icon';
 
 const REACTIONS: [string, string, string][] = [
   ['clap', '\u{1F44F}', 'Clap'], ['fire', '\u{1F525}', 'Fire'], ['heart', '\u{2764}\u{FE0F}', 'Heart'],
@@ -16,8 +17,9 @@ export function MarkSeen() {
   return null;
 }
 
-export function FeedItem({ rootId, href, who, initial, title, line, reactions, canReact }: {
-  rootId: string; href: string; who: string; initial: string; title: string; line: string; reactions: Reaction[]; canReact: boolean;
+export function FeedItem({ rootId, href, who, color, initial, title, kind, note, when, icon, isNew, reactions, canReact }: {
+  rootId: string; href: string; who: string; color: string; initial: string; title: string; kind: string; note: string | null;
+  when: string; icon: string | null; isNew: boolean; reactions: Reaction[]; canReact: boolean;
 }) {
   const [optimistic, apply] = useOptimistic(reactions, (cur: Reaction[], change: { emoji: string; on: boolean }) =>
     change.on ? [...cur, { emoji: change.emoji, mine: true, who: 'You' }] : cur.filter((r) => !(r.mine && r.emoji === change.emoji)));
@@ -36,24 +38,32 @@ export function FeedItem({ rootId, href, who, initial, title, line, reactions, c
   }).filter((c) => c.n > 0);
 
   return (
-    <article className="card stack" style={{ gap: 12 }}>
-      <Link href={href} className="row feed-link" style={{ alignItems: 'flex-start', textDecoration: 'none', color: 'inherit' }}>
-        <span aria-hidden="true" style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 20, background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{initial}</span>
-        <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-          <div><strong>{who}</strong>: {title}</div>
-          <div className="small">{line}</div>
+    <article className={`card stack stripe pc-${color} feed-card`} style={{ gap: 12 }}>
+      <Link href={href} className="row feed-link" style={{ alignItems: 'flex-start', gap: 12, textDecoration: 'none', color: 'inherit' }}>
+        <span className={`avatar pc-${color}`} style={{ width: 44, height: 44, fontSize: 20, flexShrink: 0 }} aria-hidden="true">{initial}</span>
+        <div className="stack" style={{ gap: 4, flex: '1 1 auto', minWidth: 0 }}>
+          <div className="small" style={{ fontWeight: 600 }}>{who}{isNew && <span className="feed-new">New</span>}</div>
+          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <span className="muted" style={{ display: 'inline-flex' }}><KindIcon name={icon} size={20} /></span>
+            <span className="item-title" style={{ minWidth: 0 }}>{title}</span>
+          </div>
+          <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+            <span className="badge badge-done">{kind}</span>
+            <span className="small">{when}</span>
+          </div>
+          {note && <div className="feed-note">{note}</div>}
         </div>
-        <span aria-hidden="true" className="muted" style={{ alignSelf: 'center', fontSize: 20 }}>›</span>
+        <span aria-hidden="true" className="muted" style={{ alignSelf: 'center', fontSize: 22 }}>›</span>
       </Link>
       <div className="wrap">
         {counts.map((c) => (
           <button key={c.key} type="button" className="chip" aria-pressed={c.mine} disabled={!canReact} onClick={() => toggle(c.key)}
-            aria-label={`${c.label}, ${c.n}: ${c.names}`} title={c.names} style={{ padding: '0 12px' }}>
+            aria-label={`${c.label}, ${c.n}: ${c.names}`} title={c.names} style={{ padding: '0 12px', minHeight: 36 }}>
             <span aria-hidden="true">{c.glyph}</span>&nbsp;{c.n}
           </button>
         ))}
         {canReact && (
-          <button type="button" className="chip" aria-expanded={tray} onClick={() => setTray(!tray)} style={{ padding: '0 12px' }}>
+          <button type="button" className="chip" aria-expanded={tray} onClick={() => setTray(!tray)} style={{ padding: '0 12px', minHeight: 36 }}>
             {tray ? 'Close' : 'React'}
           </button>
         )}

@@ -209,3 +209,8 @@ a:not(.nav a):has(> .link-pending.on) { background-color: var(--surface-2); }
 .note-points { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 .note-actions { position: sticky; bottom: calc(-24px - env(safe-area-inset-bottom)); background: var(--surface); padding: 8px 0 calc(4px + env(safe-area-inset-bottom)); margin-bottom: calc(-24px - env(safe-area-inset-bottom)); }
 .avatar.pc-clay, .swatch.pc-clay { box-shadow: inset 0 0 0 1.5px #ec8fbb; } /* the pale pink needs an edge on white */
+
+/* Family feed */
+.feed-card { padding-top: 14px; }
+.feed-new { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--hay); color: #1e2a21; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.feed-note { font-size: 15px; color: var(--text-2); padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2); white-space: pre-wrap; }
