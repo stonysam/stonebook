@@ -12,9 +12,10 @@
   --text: #1e2a21;
   --text-2: #4b5649;      /* secondary text */
   --text-3: #2f5a39;      /* small print */
-  --green: #006e63;       /* main buttons */
-  --green-press: #005a51;
-  --on-green: #ffffff;
+  --green: #e8b131;       /* main buttons (Crystal's yellow) */
+  --green-press: #d29d1f;
+  --on-green: #1e2a21;    /* dark: white on this yellow is 1.9:1, too faint to read */
+  --link: #006e63;        /* links and text buttons: the yellow is too pale for text on white */
   --green-soft: #e1ebdd;  /* selected chips, done badges */
   --on-green-soft: #2f5a39;
   --hay: #c99a3b;         /* accent, used sparingly */
@@ -42,6 +43,7 @@
     --green: #3e7a4c;       /* night colours: Crystal kept the originals */
     --green-press: #4a8a59;
     --on-green: #ffffff;
+    --link: #3e7a4c;
     --green-soft: #22372a;
     --on-green-soft: #cfe5d2;
     --hay: #e2b04a;

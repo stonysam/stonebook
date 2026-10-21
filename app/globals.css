@@ -12,7 +12,7 @@ body {
   line-height: 1.4;
   -webkit-tap-highlight-color: transparent;
 }
-a { color: var(--green); }
+a { color: var(--link); }
 h1, h2, h3 { margin: 0; }
 h1 { font-family: var(--font-display); font-weight: 600; font-size: 28px; line-height: 1.15; letter-spacing: -0.01em; }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -58,7 +58,7 @@ textarea { padding: 12px 14px; min-height: 88px; }
 .btn-primary:active { background: var(--green-press); }
 .btn-big { min-height: 54px; font-size: 17px; border-radius: var(--radius); }
 .btn-block { width: 100%; }
-.btn-text { border: 0; background: none; padding: 0 4px; color: var(--green); font-weight: 600; }
+.btn-text { border: 0; background: none; padding: 0 4px; color: var(--link); font-weight: 600; }
 .chip {
   flex-shrink: 0; min-height: var(--tap); padding: 0 16px; border-radius: 22px; border: 1px solid var(--line);
   background: var(--surface); font-size: 15px; cursor: pointer; text-decoration: none; color: var(--text);
@@ -156,7 +156,7 @@ a:not(.nav a):has(> .link-pending.on) { background-color: var(--surface-2); }
 .kid-stars-label { font-weight: 700; font-size: 18px; }
 .kid-stars-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; color: var(--hay); font-size: 18px; }
 .kid-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
-.kid-tile { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px 16px; border-radius: 22px; background: var(--surface); border: 2px solid var(--line); color: var(--green); text-align: center; }
+.kid-tile { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px 16px; border-radius: 22px; background: var(--surface); border: 2px solid var(--line); color: var(--link); text-align: center; }
 .kid-tile.waiting { border-style: dashed; }
 .kid-tile.done { background: var(--green-soft); border-color: transparent; color: var(--on-green-soft); }
 .kid-name { font-size: 24px; font-weight: 700; color: var(--text); line-height: 1.2; }

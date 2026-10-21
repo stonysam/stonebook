@@ -59,7 +59,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
         <Link href="/approvals" className="card row dashed" style={{ textDecoration: 'none', color: 'inherit', minHeight: 56 }}>
           <span>{myPendingApprovals === 1 ? '1 chore is waiting for your OK' : `${myPendingApprovals} chores are waiting for your OK`}</span>
           <span className="spacer" />
-          <strong style={{ color: 'var(--green)' }}>Review</strong>
+          <strong style={{ color: 'var(--link)' }}>Review</strong>
         </Link>
       )}
 

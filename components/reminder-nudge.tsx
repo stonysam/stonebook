@@ -20,7 +20,7 @@ export function ReminderNudge() {
     <div className="card row dashed" style={{ minHeight: 56, gap: 8 }}>
       <Link href="/settings" className="card-link" style={{ flex: '1 1 auto', position: 'static' }}>
         <span>Get a 7:00 summary and lift reminders on this phone</span>
-        <strong style={{ color: 'var(--green)', fontSize: 14 }}>Turn on reminders</strong>
+        <strong style={{ color: 'var(--link)', fontSize: 14 }}>Turn on reminders</strong>
       </Link>
       <button type="button" className="btn btn-text" style={{ color: 'var(--text-2)', fontWeight: 400 }} aria-label="Not now"
         onClick={() => { try { localStorage.setItem('stonebook.nudge.reminders', 'no'); } catch { /* private mode */ } setShow(false); }}>
