@@ -55,12 +55,12 @@
 /* Person colours (see lib/people.ts), Crystal's choice. --pc fills an avatar, --pt is its lettering, --pl draws stripes. */
 .pc-sky   { --pc: #004db8; --pt: #fff;    --pl: #004db8; }  /* Sam */
 .pc-moss  { --pc: #00822b; --pt: #fff;    --pl: #00822b; }  /* Crystal */
-.pc-clay  { --pc: #cf4800; --pt: #fff;    --pl: #cf4800; }  /* Ziah */
+.pc-clay  { --pc: #fce1ee; --pt: #1e2a21; --pl: #ec8fbb; }  /* Ziah: pale pink; a deeper pink edge so it shows on white cards */
 .pc-hay   { --pc: #e3b200; --pt: #1e2a21; --pl: #e3b200; }  /* Marley: yellow takes dark lettering */
 .pc-plum  { --pc: #a143e8; --pt: #fff;    --pl: #a143e8; }  /* Lucy */
-.pc-rose  { --pc: #f20000; --pt: #fff;    --pl: #f20000; }  /* Benji */
+.pc-rose  { --pc: #db7d02; --pt: #1e2a21; --pl: #db7d02; }  /* Benji: orange takes dark lettering */
 .pc-slate { --pc: #4d5e6e; --pt: #fff;    --pl: #4d5e6e; }
 .pc-teal  { --pc: #21756c; --pt: #fff;    --pl: #21756c; }
 @media (prefers-color-scheme: dark) {
-  .pc-sky { --pl: #5c93f5; } .pc-moss { --pl: #2fb35a; } .pc-slate { --pl: #8597a9; } .pc-teal { --pl: #4fa69b; }
+  .pc-sky { --pl: #5c93f5; } .pc-moss { --pl: #2fb35a; } .pc-clay { --pl: #fce1ee; } .pc-slate { --pl: #8597a9; } .pc-teal { --pl: #4fa69b; }
 }
