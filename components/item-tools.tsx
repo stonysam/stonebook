@@ -240,18 +240,18 @@ export function FixEntry(props: {
       eventId: props.eventId, objectId: props.objectId, kind, occurredOn: date, note, remove,
       meterValue: meter ? Number(meter.replace(',', '.')) : null, meterUnit: props.meterUnit,
     });
-    if (r.ok) { setOpen(false); toast.show(r.message ?? 'Fixed.'); } else setError(r.error);
+    if (r.ok) { setOpen(false); toast.show(r.message ?? 'Saved.'); } else setError(r.error);
   });
 
   return (
     <>
-      <button type="button" className="btn btn-text" onClick={() => setOpen(true)} aria-label={`Fix ${props.kind} on ${props.occurredOn}`}>Fix</button>
+      <button type="button" className="btn btn-text" onClick={() => setOpen(true)} aria-label={`Edit ${props.kind} on ${props.occurredOn}`}>Edit</button>
       {open && (
         <div className="sheet-backdrop" onClick={() => setOpen(false)}>
-          <form className="sheet" role="dialog" aria-modal="true" aria-label="Fix this entry" onClick={(e) => e.stopPropagation()}
+          <form className="sheet" role="dialog" aria-modal="true" aria-label="Edit this entry" onClick={(e) => e.stopPropagation()}
             onSubmit={(e) => { e.preventDefault(); send(false); }}>
             <div className="sheet-handle" />
-            <h2 style={{ fontSize: 20 }}>Fix this entry</h2>
+            <h2 style={{ fontSize: 20 }}>Edit this entry</h2>
             <p className="small" style={{ margin: 0 }}>The original stays in the history, marked as replaced.</p>
             <label className="field">What happened<input value={kind} onChange={(e) => setKind(e.target.value)} required maxLength={80} /></label>
             <label className="field">Date<input type="date" value={date} max={props.today} onChange={(e) => setDate(e.target.value)} required /></label>

@@ -175,7 +175,7 @@ a:not(.nav a):has(> .link-pending.on) { background-color: var(--surface-2); }
 
 /* People */
 .avatar { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 50%;
-  background: var(--pc); color: #fff; font-weight: 700; line-height: 1; }
+  background: var(--pc); color: var(--pt, #fff); font-weight: 700; line-height: 1; }
 .avatars { display: inline-flex; align-items: center; }
 .avatars > * + * { margin-left: -6px; }
 .avatars .avatar { box-shadow: 0 0 0 2px var(--surface); }

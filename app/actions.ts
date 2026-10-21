@@ -60,9 +60,9 @@ export async function correctEvent(input: {
     meter_value: input.meterValue ?? null, meter_unit: input.meterValue != null ? (input.meterUnit ?? null) : null,
     correction_of: input.eventId, voided: !!input.remove, created_by: me.id,
   });
-  if (error) return fail('Couldn’t fix that entry. It may already have been fixed.');
+  if (error) return fail('Couldn’t change that entry. It may already have been changed.');
   done();
-  return { ok: true, message: input.remove ? 'Entry removed. It still shows in the full history as removed.' : 'Entry fixed.' };
+  return { ok: true, message: input.remove ? 'Entry removed. It still shows in the full history as removed.' : 'Entry updated.' };
 }
 
 // ---------------------------------------------------------------------------

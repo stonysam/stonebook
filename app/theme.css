@@ -1,22 +1,23 @@
 /*
  * Stonebook colours and type, all in one place. Change a value here and the
  * whole app follows. Light is the default; dark follows the phone's setting.
- * Palette comes from the app icon: farm green, warm oat, river-stone greys, hay.
+ * Colours: Crystal's choice from the palette page (21 Oct 2026).
  */
 :root {
-  --bg: #f4efe4;          /* warm oat page */
-  --surface: #fffdf8;     /* cards, sheets */
-  --surface-2: #ebe5d7;   /* chips, segmented controls */
-  --line: #d9d1c1;
+  /* Crystal's palette, chosen 21 Oct 2026 (day). */
+  --bg: #ffffff;          /* page */
+  --surface: #ffffff;     /* cards, sheets */
+  --surface-2: #dbebff;   /* chips, segmented controls */
+  --line: #000000;
   --text: #1e2a21;
-  --text-2: #4b5649;      /* secondary text, 7:1 on oat */
-  --text-3: #636b5d;      /* captions, 5:1 on white */
-  --green: #2f5a39;       /* main buttons */
-  --green-press: #24472c;
+  --text-2: #4b5649;      /* secondary text */
+  --text-3: #2f5a39;      /* small print */
+  --green: #006e63;       /* main buttons */
+  --green-press: #005a51;
   --on-green: #ffffff;
   --green-soft: #e1ebdd;  /* selected chips, done badges */
-  --on-green-soft: #1e3a25;
-  --hay: #c99a3b;         /* highlights, used sparingly */
+  --on-green-soft: #2f5a39;
+  --hay: #c99a3b;         /* accent, used sparingly */
   --hay-soft: #f4e6c3;
   --stone: #bfb29e;
   --overlay: rgba(20, 24, 18, 0.45);
@@ -38,7 +39,7 @@
     --text: #eef0e8;
     --text-2: #c3cbbf;
     --text-3: #a3ad9f;
-    --green: #3e7a4c;
+    --green: #3e7a4c;       /* night colours: Crystal kept the originals */
     --green-press: #4a8a59;
     --on-green: #ffffff;
     --green-soft: #22372a;
@@ -51,16 +52,15 @@
   }
 }
 
-/* Person colours (see lib/people.ts). --pc fills an avatar under white text; --pl draws stripes. */
-.pc-moss  { --pc: #4f7a34; --pl: #4f7a34; }
-.pc-sky   { --pc: #2f6f96; --pl: #2f6f96; }
-.pc-clay  { --pc: #a9532f; --pl: #a9532f; }
-.pc-plum  { --pc: #7f4775; --pl: #7f4775; }
-.pc-hay   { --pc: #946b1e; --pl: #946b1e; }
-.pc-slate { --pc: #4d5e6e; --pl: #4d5e6e; }
-.pc-rose  { --pc: #b04660; --pl: #b04660; }
-.pc-teal  { --pc: #21756c; --pl: #21756c; }
+/* Person colours (see lib/people.ts), Crystal's choice. --pc fills an avatar, --pt is its lettering, --pl draws stripes. */
+.pc-sky   { --pc: #004db8; --pt: #fff;    --pl: #004db8; }  /* Sam */
+.pc-moss  { --pc: #00822b; --pt: #fff;    --pl: #00822b; }  /* Crystal */
+.pc-clay  { --pc: #cf4800; --pt: #fff;    --pl: #cf4800; }  /* Ziah */
+.pc-hay   { --pc: #e3b200; --pt: #1e2a21; --pl: #e3b200; }  /* Marley: yellow takes dark lettering */
+.pc-plum  { --pc: #a143e8; --pt: #fff;    --pl: #a143e8; }  /* Lucy */
+.pc-rose  { --pc: #f20000; --pt: #fff;    --pl: #f20000; }  /* Benji */
+.pc-slate { --pc: #4d5e6e; --pt: #fff;    --pl: #4d5e6e; }
+.pc-teal  { --pc: #21756c; --pt: #fff;    --pl: #21756c; }
 @media (prefers-color-scheme: dark) {
-  .pc-moss { --pl: #78a85a; } .pc-sky { --pl: #5f9cc4; } .pc-clay { --pl: #d07b56; } .pc-plum { --pl: #b07aa6; }
-  .pc-hay { --pl: #c99a3b; } .pc-slate { --pl: #8597a9; } .pc-rose { --pl: #d8768f; } .pc-teal { --pl: #4fa69b; }
+  .pc-sky { --pl: #5c93f5; } .pc-moss { --pl: #2fb35a; } .pc-slate { --pl: #8597a9; } .pc-teal { --pl: #4fa69b; }
 }

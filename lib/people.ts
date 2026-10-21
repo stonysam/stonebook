@@ -1,10 +1,10 @@
 import type { MemberRow, PersonColor } from './database.types';
 
-// Person colours: a fixed set chosen to sit with the farm green, oat and hay palette.
-// Every one carries white lettering at 4.5:1 or better.
+// Person colours: Crystal's six (21 Oct 2026) plus two spares. The keys are stored in members.color;
+// the actual colours live in app/theme.css (.pc-<key>).
 export const PALETTE: { key: PersonColor; label: string }[] = [
-  { key: 'moss', label: 'Moss' }, { key: 'sky', label: 'Sky' }, { key: 'clay', label: 'Clay' }, { key: 'plum', label: 'Plum' },
-  { key: 'hay', label: 'Hay' }, { key: 'slate', label: 'Slate' }, { key: 'rose', label: 'Rose' }, { key: 'teal', label: 'Teal' },
+  { key: 'sky', label: 'Blue' }, { key: 'moss', label: 'Green' }, { key: 'clay', label: 'Orange' }, { key: 'hay', label: 'Yellow' },
+  { key: 'plum', label: 'Purple' }, { key: 'rose', label: 'Red' }, { key: 'slate', label: 'Slate' }, { key: 'teal', label: 'Teal' },
 ];
 
 /** A person's colour: their chosen one, or a different default for each person until a parent picks. */
