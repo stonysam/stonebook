@@ -3,7 +3,7 @@
 
 insert into public.object_types (name, icon, sort_order, confirm_kid_logs, assignable) values
   ('Person',          'user',     10, false, false),
-  ('Activity or work','calendar', 15, false, false),
+  ('Activities',      'calendar', 15, false, false),
   ('Vehicle',         'car',      20, false, false),
   ('Machine',         'tractor',  30, false, false),
   ('Animal or flock', 'paw',      40, false, false),
@@ -61,8 +61,8 @@ join (values
   ('Chore or task',   'picture',       'Picture (for younger kids)', 'choice', '["hens","eggs","dog","cat","bin","dishes","table","bed","toys","laundry","plants","teeth","book","broom","logs","star"]', false, 5),
   ('Chore or task',   'instructions',  'How to do it',       'text',   null, false, 10),
 
-  ('Activity or work','place',         'Where',              'text',   null, false, 10),
-  ('Activity or work','description',   'Description',        'text',   null, false, 20)
+  ('Activities',      'place',         'Where',              'text',   null, false, 10),
+  ('Activities',      'description',   'Description',        'text',   null, false, 20)
 ) as f(type_name, key, label, kind, options, required, sort_order)
   on f.type_name = t.name
 on conflict (object_type_id, key) do nothing;

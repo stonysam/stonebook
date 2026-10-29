@@ -120,6 +120,18 @@ function fieldValues(form: FormData, keys: { key: string; kind: string; multiple
   return out;
 }
 
+/**
+ * Chores with "Log details" are recorded against another item (cleaning the coop → the hens):
+ * every reminder gets that item, and its entries are named after the chore.
+ */
+function applyLogsTo(rows: Record<string, unknown>[], form: FormData, choreName: string): string | null {
+  if (clean(form.get('completion'), 4) !== 'log') return null;
+  const logsTo = clean(form.get('logs_to'), 40);
+  if (!logsTo) return 'Pick the item it’s logged on.';
+  for (const r of rows) { r.logs_to = logsTo; r.event_kind = choreName.slice(0, 80); }
+  return null;
+}
+
 /** A photo field may only point at this item's own photos. */
 function keepOwnPhoto(values: Record<string, Json>, objectId: string): Record<string, Json> {
   if (typeof values.photo === 'string' && !values.photo.startsWith(`${objectId}/`)) delete values.photo;
@@ -255,8 +267,11 @@ export async function createItem(_prev: ActionResult | null, form: FormData): Pr
   const objectId = crypto.randomUUID();
   const grouping = await groupingFromForm(form, typeId);
   if (grouping.error) return fail(grouping.error);
+  if (isChore(type.name) && !clean(form.get('responsible'), 40)) return fail('Pick who does it.');
   const ruleCheck = isActivity(type.name) ? { rows: [] } : rulesFromForm(form, objectId, ownerId, isChore(type.name));
   if (ruleCheck.error) return fail(ruleCheck.error);
+  const logsToError = isChore(type.name) ? applyLogsTo(ruleCheck.rows, form, name) : null;
+  if (logsToError) return fail(logsToError);
   const slotCheck = isActivity(type.name) ? slotFromForm(form, objectId) : {};
   if (slotCheck.error) return fail(slotCheck.error);
 
@@ -265,6 +280,7 @@ export async function createItem(_prev: ActionResult | null, form: FormData): Pr
     share_with_family: false,
     field_values: keepOwnPhoto(fieldValues(form, await fieldKeys(typeId)), objectId),
     ...grouping.row,
+    keep_log: isActivity(type.name) && form.get('keep_log') === '1',
   });
   if (error) return fail(friendlyError(error.message));
   const photo = await savePhoto(objectId, form.get('photo_file'));
@@ -301,6 +317,7 @@ export async function updateDetails(_prev: ActionResult | null, form: FormData):
   if (photo.path) values.photo = photo.path;
   const oldPhoto = (obj.field_values as Record<string, unknown> | null)?.photo as string | undefined;
   const patch: Record<string, unknown> = { name, field_values: values, ...grouping.row };
+  if (form.get('keep_log_field') === '1') patch.keep_log = form.get('keep_log') === 'on';
   if (['shared', 'personal', 'private'].includes(visibility)) {
     patch.visibility = visibility;
     patch.share_with_family = false; // Personal means the owner and parents; Shared is the whole family
@@ -333,6 +350,11 @@ export async function addRule(_prev: ActionResult | null, form: FormData): Promi
   const { data: type } = await supabase.from('object_types').select('name').eq('id', obj.object_type_id).single();
   const rule = rulesFromForm(form, objectId, obj.owner_id, isChore(type?.name));
   if (rule.error) return fail(rule.error);
+  if (isChore(type?.name)) {
+    const { data: named } = await supabase.from('objects').select('name').eq('id', objectId).single();
+    const logsToError = applyLogsTo(rule.rows, form, named?.name ?? 'Done');
+    if (logsToError) return fail(logsToError);
+  }
   if (!rule.rows.length) return fail('Pick how often.');
   const { error } = await supabase.from('rules').insert(rule.rows as never);
   if (error) return fail('You can’t add reminders to this one.');
@@ -485,6 +507,7 @@ export async function quickDone(objectId: string, ruleId: string | null): Promis
   const id = crypto.randomUUID();
   const { data, error } = await supabase.from('events').insert({
     id, root_id: id, object_id: objectId, kind: rule?.event_kind || 'Done', occurred_on: todayIn(), created_by: me.id, rule_id: ruleId,
+    data: { quick: true },
   }).select('needs_confirmation').single();
   if (error) return fail('Couldn’t save that. Try again.');
   done();
@@ -521,6 +544,24 @@ export async function abortMission(objectId: string, ruleId: string): Promise<Ac
   return { ok: true, message: 'Mission aborted. No hearts this time.' };
 }
 
+/** Hand a reminder (one person's part of a chore) to someone else. A one-person chore moves with it. */
+export async function setRuleOwner(ruleId: string, memberId: string): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  const { data: rule } = await supabase.from('rules').select('object_id, owner_id').eq('id', ruleId).single();
+  if (!rule) return fail('Not found.');
+  const { data: member } = await supabase.from('members').select('display_name').eq('id', memberId).single();
+  if (!member) return fail('Pick someone in the family.');
+  if (rule.owner_id === memberId) return { ok: true };
+  const { error, count } = await supabase.from('rules').update({ owner_id: memberId }, { count: 'exact' }).eq('id', ruleId);
+  if (error || count === 0) return fail('You can’t change this one.');
+  const { data: others } = await supabase.from('rules').select('id').eq('object_id', rule.object_id).eq('active', true);
+  if ((others ?? []).length <= 1) {
+    await supabase.from('objects').update({ owner_id: memberId, visibility: 'shared' }).eq('id', rule.object_id);
+  }
+  done();
+  return { ok: true, message: `Now ${member.display_name}’s.` };
+}
+
 export async function setRuleCompletion(ruleId: string, completion: 'done' | 'log'): Promise<ActionResult> {
   const { supabase } = await getMe();
   const { error, count } = await supabase.from('rules').update({ completion }, { count: 'exact' }).eq('id', ruleId);
@@ -544,4 +585,15 @@ export async function markNotesSeen(ids: string[]): Promise<void> {
   const { supabase, me } = await getMe();
   const rows = ids.filter((id) => /^[a-z0-9-]{3,60}$/.test(id)).slice(0, 20).map((note_id) => ({ member_id: me.id, note_id }));
   if (rows.length) await supabase.from('whats_new_seen').upsert(rows, { onConflict: 'member_id,note_id', ignoreDuplicates: true });
+}
+
+/** How many days things stay in this person's Feed. */
+export async function setFeedDays(days: number): Promise<ActionResult> {
+  const { supabase } = await getMe();
+  const n = Math.round(Number(days));
+  if (!Number.isFinite(n) || n < 1 || n > 365) return fail('Pick between 1 and 365 days.');
+  const { error } = await supabase.rpc('set_feed_days', { p_days: n });
+  if (error) return fail('Couldn’t save that.');
+  done();
+  return { ok: true, message: `Your Feed keeps things for ${n} ${n === 1 ? 'day' : 'days'}.` };
 }

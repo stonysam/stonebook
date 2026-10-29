@@ -1,6 +1,6 @@
 // How each kind of thing behaves in the forms. Names match object_types.name.
 export const CHORE = 'Chore or task';
-export const ACTIVITY = 'Activity or work';
+export const ACTIVITY = 'Activities';
 
 export const isChore = (typeName: string | null | undefined) => typeName === CHORE;
 export const isActivity = (typeName: string | null | undefined) => typeName === ACTIVITY;

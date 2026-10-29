@@ -13,7 +13,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   ]);
   // If the table can't be read, show nothing rather than the same note on every visit.
   const notes = notesSeen ? unseenNotes(me.role, me.created_at, notesSeen.map((n) => n.note_id)) : [];
-  const since = seen?.seen_at ?? '1970-01-01';
+  const cutoff = new Date(Date.now() - (me.feed_days ?? 14) * 86_400_000).toISOString();
+  const since = [seen?.seen_at ?? '1970-01-01', cutoff].sort().at(-1)!;
   const feedCount = (feed ?? []).filter((f) => f.announced_at > since && f.created_by !== me.id).length;
 
   return (

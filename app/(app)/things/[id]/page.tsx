@@ -1,9 +1,9 @@
 import Link from '@/components/link';
 import { notFound } from 'next/navigation';
-import { FixEntry, ItemActions, StopRuleButton, StopSlotButton } from '@/components/item-tools';
+import { FixEntry, ItemActions, StopRuleButton, StopSlotButton, VISIBILITY_LABEL } from '@/components/item-tools';
 import { Avatar, Avatars } from '@/components/avatar';
 import { AbortButton, DoneButton, LogButton } from '@/components/log-button';
-import { CompletionSwitch } from '@/components/item-tools';
+import { CompletionSwitch, RuleOwnerSelect } from '@/components/item-tools';
 import { colorOf } from '@/lib/people';
 import { photoUrls } from '@/lib/photos';
 import { ChoreIcon } from '@/components/chore-icons';
@@ -11,7 +11,7 @@ import { SessionCard } from '@/components/session-card';
 import { dateText, possessive, whenText, WEEKDAYS } from '@/lib/format';
 import { isActivity, isChore } from '@/lib/types';
 import {
-  canEditObject, driverOptions, dueFor, eventsOf, groupMates, loadWorld, memberName, meterUnitFor, sessionView, suggestedKinds, turnsOf, typeOf,
+  canEditObject, driverOptions, historyOf, inLog, logTargets, dueFor, groupMates, loadWorld, memberName, meterUnitFor, sessionView, suggestedKinds, turnsOf, typeOf,
   upcomingSessions,
 } from '@/lib/world';
 
@@ -37,7 +37,12 @@ export default async function ItemPage({ params, searchParams }: {
   const photo = photoOf(o) ? urls[photoOf(o)!] : undefined;
   const nameById = Object.fromEntries(inGroup.map((x) => [x.id, x.name]));
   // A group's history includes its animals' entries, so the paddock's story is in one place.
-  const history = inGroup.length ? w.events.filter((e) => e.object_id === o.id || e.object_id in nameById) : eventsOf(w, o.id);
+  // Things in the Log show logged entries, not one-tap Done ticks; a group includes its animals' entries.
+  const logOnly = inLog(w, o);
+  const history = [o, ...inGroup].flatMap((x) => historyOf(w, x, { logOnly }))
+    .filter((e, i, all) => all.findIndex((x) => x.id === e.id) === i)
+    .sort((a, b) => b.occurred_on.localeCompare(a.occurred_on) || b.created_at.localeCompare(a.created_at));
+  const logsTo = w.rules.filter((r) => r.object_id === o.id && r.logs_to).map((r) => w.objects.find((x) => x.id === r.logs_to)).filter((x) => !!x);
   const thisYear = Number(w.today.slice(0, 4));
   const bornText = (y: unknown) => {
     const n = Number(y);
@@ -68,10 +73,10 @@ export default async function ItemPage({ params, searchParams }: {
     <main className="page wide">
       <div className="split">
         <div className="main">
-          <Link href="/things" className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>Back to Things</Link>
+          <Link href={inLog(w, o) ? `/log/${o.object_type_id}` : '/'} className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>{inLog(w, o) ? `Back to ${type?.name ?? 'Log'}` : 'Back to Today'}</Link>
           <header>
             <div className="small">
-              {type?.name} · {o.visibility === 'shared' ? 'Shared' : o.visibility === 'personal' ? 'Personal' : 'Private'} · looked after by {owner}
+              {type?.name} · {VISIBILITY_LABEL[o.visibility]} · looked after by {owner}
             </div>
             {photo && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -79,6 +84,7 @@ export default async function ItemPage({ params, searchParams }: {
             )}
             <h1>{o.name}</h1>
             {parent && <Link href={`/things/${parent.id}`} className="small">Part of {parent.name}</Link>}
+            {logsTo.length > 0 && <div className="small">Logged on {logsTo.map((x, i) => <span key={x!.id}>{i ? ', ' : ''}<Link href={`/things/${x!.id}`}>{x!.name}</Link></span>)}</div>}
             {o.archived_at && <p className="badge badge-wait" style={{ marginTop: 8 }}>Archived</p>}
             {added && <p className="badge badge-done" style={{ marginTop: 8 }}>Added</p>}
           </header>
@@ -112,6 +118,7 @@ export default async function ItemPage({ params, searchParams }: {
               defs={defs} values={values} members={w.members}
               ownerId={o.owner_id} meId={w.me.id} today={w.today} canRemind
               grouped={grouped} groups={groupOptions} isGroup={o.is_group} parentId={o.parent_id} photoUrl={photo}
+              logTargets={isChore(type?.name) ? logTargets(w) : []} keepLog={o.keep_log}
             />
           )}
 
@@ -179,7 +186,8 @@ export default async function ItemPage({ params, searchParams }: {
                 <span className="small">
                   {groupMates(w, d.rule).length ? `${possessive(memberName(w, d.rule.owner_id))} part of a group job` : isChore(type?.name) ? `${possessive(memberName(w, d.rule.owner_id))} turn` : `Reminds ${memberName(w, d.rule.owner_id)}`}
                 </span>
-                {editable && d.rule.kind !== 'record' && <CompletionSwitch ruleId={d.rule.id} value={d.rule.completion} />}
+                {editable && isChore(type?.name) && <RuleOwnerSelect ruleId={d.rule.id} ownerId={d.rule.owner_id} members={w.members} meId={w.me.id} />}
+                {editable && d.rule.kind !== 'record' && !d.rule.logs_to && <CompletionSwitch ruleId={d.rule.id} value={d.rule.completion} />}
                 {editable && <StopRuleButton ruleId={d.rule.id} />}
               </div>
             ))}
@@ -225,7 +233,7 @@ export default async function ItemPage({ params, searchParams }: {
             {shown.map((e) => (
               <div key={e.id} className="card row" style={{ padding: '10px 6px 10px 16px' }}>
                 <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-                  <div className="item-title">{e.object_id !== o.id ? `${nameById[e.object_id]}: ` : ''}{e.kind}</div>
+                  <div className="item-title">{e.object_id !== o.id && nameById[e.object_id] ? `${nameById[e.object_id]}: ` : ''}{e.kind}</div>
                   {(e.note || e.meter_value != null) && (
                     <div style={{ fontSize: 14 }}>
                       {[e.meter_value != null ? `${e.meter_value.toLocaleString('en-GB')} ${e.meter_unit ?? ''}` : null, e.note].filter(Boolean).join(' · ')}

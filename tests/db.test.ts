@@ -518,7 +518,7 @@ describe('turns', () => {
 describe('activities and work', () => {
   let scouts: string, slot: string;
   beforeAll(async () => {
-    scouts = await as('junior', () => addObject({ name: 'Scouts', type: 'Activity or work', owner: id.junior, fields: { place: 'Scout hut' } }));
+    scouts = await as('junior', () => addObject({ name: 'Scouts', type: 'Activities', owner: id.junior, fields: { place: 'Scout hut' } }));
   });
 
   it('the person adds their own times; parents can too; others cannot', async () => {
@@ -643,5 +643,29 @@ describe('Benji mode on the family tablet', () => {
   it('nobody can read PIN hashes or call the checker directly', async () => {
     await expect(as('sam', () => rows('select * from member_pins'))).rejects.toThrow(/permission denied/);
     await expect(as('sam', () => rows(`select app.check_pin($1, '4321')`, [id.child]))).rejects.toThrow(/permission denied/);
+  });
+});
+
+describe('chores that log to an item', () => {
+  it('writes the chore’s entry into the item’s history, and only there', async () => {
+    const hens = await as('sam', () => addObject({ name: 'Hens', type: 'Animal or flock', owner: id.sam, group: true, fields: { species: ['Chicken'] } }));
+    const coop = await as('sam', () => addObject({ name: 'Clean the coop', type: 'Chore or task', owner: id.eldest }));
+    const rule = (await as('sam', () => rows(
+      `insert into rules (object_id, name, kind, event_kind, every_days, owner_id, completion, logs_to)
+       values ($1, 'Clean the coop', 'interval', 'Clean the coop', 7, $2, 'log', $3) returning id`, [coop, id.eldest, hens])))[0].id;
+    await as('eldest', () => db.query(
+      `insert into events (object_id, kind, occurred_on, created_by, rule_id) values ($1, 'Clean the coop', '2026-10-29', $2, $3)`,
+      [hens, id.eldest, rule]));
+    expect((await rows('select count(*)::int n from events where object_id = $1 and rule_id = $2', [hens, rule]))[0].n).toBe(1);
+    await expect(as('eldest', () => db.query(
+      `insert into events (object_id, kind, occurred_on, created_by, rule_id) values ($1, 'x', '2026-10-29', $2, $3)`,
+      [car, id.eldest, rule]))).rejects.toThrow(/different item/);
+  });
+
+  it('each person sets how long things stay in their own Feed', async () => {
+    await as('eldest', () => db.query('select set_feed_days(30)'));
+    expect((await rows('select feed_days from members where id = $1', [id.eldest]))[0].feed_days).toBe(30);
+    expect((await rows('select feed_days from members where id = $1', [id.sam]))[0].feed_days).toBe(14);
+    await expect(as('eldest', () => db.query('select set_feed_days(0)'))).rejects.toThrow(/between 1 and 365/);
   });
 });

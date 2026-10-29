@@ -10,7 +10,7 @@ export const metadata = { title: 'Family feed · Stonebook' };
 export default async function Feed() {
   const { supabase, me } = await getMe();
   const [{ data: feed }, { data: members }, { data: seen }, { data: objects }, { data: types }] = await Promise.all([
-    supabase.from('family_feed').select('*').order('announced_at', { ascending: false }).limit(60),
+    supabase.from('family_feed').select('*').order('announced_at', { ascending: false }).limit(200),
     supabase.from('members').select('*'),
     supabase.from('feed_seen').select('seen_at').eq('member_id', me.id).maybeSingle(),
     supabase.from('objects').select('id, object_type_id'),
@@ -23,7 +23,9 @@ export default async function Feed() {
     return types?.find((t) => t.id === typeId)?.icon ?? null;
   };
   const since = seen?.seen_at ?? '1970-01-01';
-  const items = feed ?? [];
+  // Each person chooses how long things stay in their Feed (Settings); the history stays in the Log.
+  const cutoff = new Date(Date.now() - (me.feed_days ?? 14) * 86_400_000).toISOString();
+  const items = (feed ?? []).filter((f) => f.announced_at >= cutoff);
   const today = todayIn('Europe/Prague');
   const dayOf = (ts: string) => todayIn('Europe/Prague', new Date(ts));
   const heading = (day: string) => (day === today ? 'Today' : day === addDays(today, -1) ? 'Yesterday' : dayLabel(day, today));
@@ -61,7 +63,7 @@ export default async function Feed() {
       })}
       {items.length === 0 && (
         <div className="card dashed" style={{ textAlign: 'center', padding: 32 }}>
-          When someone finishes something on a shared thing, it shows up here for everyone to cheer.
+          When someone finishes something on a family thing, it shows up here for everyone to cheer. Things stay for {me.feed_days ?? 14} days; you can change that in Settings.
         </div>
       )}
     </main>

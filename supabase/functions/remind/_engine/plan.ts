@@ -58,15 +58,17 @@ export const toEngineEvent = (e: PEvent): EventRecord => ({
 });
 
 /**
- * The entries that count for a reminder. An entry that names its reminder counts only for it.
+ * The entries that count for a reminder. An entry that names its reminder counts only for it,
+ * wherever it was written (a chore that logs to the hens writes on the hens).
  * When an item has turns (the same job reminding different people, like dishes), an entry
  * that names none counts for the turn of whoever logged it.
  */
 export function eventsForRule<E extends PEvent>(rules: PRule[], events: E[], rule: PRule): E[] {
   const turns = rules.filter((r) => r.object_id === rule.object_id && r.kind !== 'record' && sameKind(r.event_kind, rule.event_kind));
   const hasTurns = new Set(turns.map((r) => r.owner_id)).size > 1;
-  return events.filter((e) => e.object_id === rule.object_id
-    && (e.rule_id ? e.rule_id === rule.id : !hasTurns || e.created_by === rule.owner_id));
+  return events.filter((e) => (e.rule_id
+    ? e.rule_id === rule.id
+    : e.object_id === rule.object_id && (!hasTurns || e.created_by === rule.owner_id)));
 }
 
 export function dueOf(d: PlanData, rule: PRule, today: string): DueResult {

@@ -214,3 +214,12 @@ a:not(.nav a):has(> .link-pending.on) { background-color: var(--surface-2); }
 .feed-card { padding-top: 14px; }
 .feed-new { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--hay); color: #1e2a21; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
 .feed-note { font-size: 15px; color: var(--text-2); padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2); white-space: pre-wrap; }
+
+/* Log */
+.log-kinds { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 10px; }
+.log-kind { min-height: 128px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  text-align: center; text-decoration: none; color: inherit; }
+.log-nested { margin-left: 22px; border-left-width: 3px; }
+.add-big { min-height: 112px; display: flex; align-items: center; gap: 18px; padding: 20px 22px; text-decoration: none; color: inherit; }
+.item-pick { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 10px 14px; color: inherit; cursor: pointer; }
+.item-pick:last-child { border-bottom: 0; }

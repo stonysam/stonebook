@@ -3,22 +3,22 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/auth', () => ({ getMe: vi.fn() }));
 vi.mock('react', async (orig) => ({ ...(await orig<typeof import('react')>()), cache: <T,>(fn: T) => fn }));
 
-const { dueFor, suggestedKinds, toEngineRule, canEditObject, recentThings, sessionsOn, choresOf, kidToday } = await import('../lib/world');
+const { dueFor, suggestedKinds, toEngineRule, canEditObject, recentThings, sessionsOn, choresOf, kidToday, historyOf, inLog, isDoneTap } = await import('../lib/world');
 const { whenText } = await import('../lib/format');
 import type { EventRow, MemberRow, ObjectRow, RuleRow } from '../lib/database.types';
 import type { World } from '../lib/world';
 
 const member = (id: string, role: MemberRow['role']): MemberRow =>
-  ({ id, display_name: id, role, email: null, auth_user_id: null, created_at: '2026-10-01T00:00:00Z', color: null });
+  ({ id, display_name: id, role, email: null, auth_user_id: null, created_at: '2026-10-01T00:00:00Z', color: null, feed_days: 14 });
 const object = (id: string, owner: string, extra: Partial<ObjectRow> = {}): ObjectRow => ({
   id, object_type_id: 't-' + (extra.name ?? 'thing'), name: id, owner_id: owner, visibility: 'shared', share_with_family: false,
-  field_values: {}, archived_at: null, created_by: owner, created_at: '2026-10-01T00:00:00Z', is_group: false, parent_id: null, ...extra,
+  field_values: {}, archived_at: null, created_by: owner, created_at: '2026-10-01T00:00:00Z', is_group: false, parent_id: null, keep_log: false, ...extra,
 });
 const rule = (id: string, objectId: string, extra: Partial<RuleRow>): RuleRow => ({
   id, object_id: objectId, name: 'Rule', kind: 'interval', event_kind: 'Done', every_months: null, every_days: null,
   meter_every: null, meter_unit: null, due_on: null, renew_every_months: null, starts_on: null, meter_start: null,
   weekdays: null, owner_id: 'sam', lead_days: [14, 1], overdue_repeat_days: 7, active: true, created_by: 'sam',
-  created_at: '2026-10-18T08:00:00Z', completion: 'log', ...extra,
+  created_at: '2026-10-18T08:00:00Z', completion: 'log', logs_to: null, ...extra,
 });
 const event = (id: string, objectId: string, kind: string, on: string): EventRow => ({
   id, object_id: objectId, kind, occurred_on: on, meter_value: null, meter_unit: null, data: {}, note: null,
@@ -150,5 +150,41 @@ describe('Benji’s screen', () => {
     expect(chores.map((c) => [c.object.id, c.state])).toEqual([['hens', 'todo'], ['chain', 'done']]);
     expect(chores[0].picture).toBe('hens');
     expect(starsThisWeek).toBe(1); // Sunday 11th was last week
+  });
+});
+
+describe('the Log', () => {
+  const kinds = (w: World) => {
+    w.types = [
+      { id: 't-chore', name: 'Chore or task', icon: 'check', sort_order: 0, confirm_kid_logs: true, assignable: true, groups: false, hidden: false, created_at: '' },
+      { id: 't-thing', name: 'Vehicle', icon: 'car', sort_order: 1, confirm_kid_logs: false, assignable: false, groups: false, hidden: false, created_at: '' },
+    ];
+    w.objects = [object('car', 'sam'), object('coop', 'lucy', { object_type_id: 't-chore' }), object('bins', 'lucy', { object_type_id: 't-chore' }), object('hens', 'lucy')];
+    return w;
+  };
+
+  it('holds things that keep a history, not Done-style chores', () => {
+    const w = kinds(world([
+      rule('oil', 'car', { every_months: 12 }),
+      rule('bins', 'bins', { kind: 'weekly', weekdays: [1], completion: 'done' }),
+      rule('coop', 'coop', { kind: 'weekly', weekdays: [6], completion: 'log', logs_to: 'hens' }),
+    ], []));
+    const names = w.objects.filter((o) => inLog(w, o)).map((o) => o.id);
+    expect(names).toEqual(['car', 'hens']); // the coop chore lives in the hens' history
+  });
+
+  it('shows a chore’s entry in the item it logs to, and leaves Done taps out', () => {
+    const w = kinds(world([
+      rule('coop', 'coop', { kind: 'weekly', weekdays: [6], completion: 'log', logs_to: 'hens', event_kind: 'Clean the coop' }),
+      rule('feed', 'hens', { kind: 'weekly', weekdays: [1], completion: 'done' }),
+    ], [
+      { ...event('e1', 'hens', 'Clean the coop', '2026-10-17'), rule_id: 'coop' },
+      { ...event('e2', 'hens', 'Done', '2026-10-18'), rule_id: 'feed', data: { quick: true } },
+    ]));
+    const hens = w.objects.find((o) => o.id === 'hens')!;
+    const coop = w.objects.find((o) => o.id === 'coop')!;
+    expect(historyOf(w, hens, { logOnly: true }).map((e) => e.id)).toEqual(['e1']);
+    expect(historyOf(w, coop).map((e) => e.id)).toEqual(['e1']);
+    expect(isDoneTap(w, w.events[1])).toBe(true);
   });
 });

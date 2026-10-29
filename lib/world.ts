@@ -8,6 +8,7 @@ import { addDays, daysBetween, isoWeekday, todayIn } from '@/src/engine/dates';
 import { getMe } from '@/lib/auth';
 import { dayLabel } from '@/lib/format';
 import { colorOf } from '@/lib/people';
+import { isActivity, isChore } from '@/lib/types';
 import type { ActivityChangeRow, ActivitySlotRow, AwaitingRow, EventRow, FieldDefRow, MemberRow, ObjectRow, ObjectTypeRow, RuleRow } from '@/lib/database.types';
 
 export interface World {
@@ -265,4 +266,42 @@ export function dueCards(w: World, rows: DueRow[]): DueCard[] {
     cards.set(key, card);
   }
   return [...cards.values()];
+}
+
+// ---------------------------------------------------------------------------
+// The Log: things whose history is kept (as opposed to Done-style chores)
+// ---------------------------------------------------------------------------
+
+/** A one-tap "Done", rather than a logged entry. Done taps show on Today and in the Feed, not in the Log. */
+export function isDoneTap(w: World, e: EventRow): boolean {
+  const data = (e.data ?? {}) as Record<string, unknown>;
+  if (data.quick === true) return true;
+  const rule = e.rule_id ? w.rules.find((r) => r.id === e.rule_id) : undefined;
+  return !!rule && rule.completion === 'done' && !rule.logs_to;
+}
+
+/** Whether a thing belongs in the Log: anything that keeps a history, not Done-style chores. */
+export function inLog(w: World, o: ObjectRow): boolean {
+  const type = typeOf(w, o)?.name;
+  if (isActivity(type)) return o.keep_log;
+  const rules = w.rules.filter((r) => r.object_id === o.id && r.kind !== 'record');
+  // A chore that logs to another item lives in that item's history, not as its own entry.
+  if (isChore(type)) return rules.some((r) => r.completion === 'log' && !r.logs_to);
+  return rules.length === 0 || rules.some((r) => r.completion === 'log');
+}
+
+/** An item's entries, including those a chore wrote here or a chore of this item wrote elsewhere. */
+export function historyOf(w: World, o: ObjectRow, { logOnly = false } = {}): EventRow[] {
+  const own = new Set(w.rules.filter((r) => r.object_id === o.id).map((r) => r.id));
+  return w.events.filter((e) => (e.object_id === o.id || (e.rule_id != null && own.has(e.rule_id)))
+    && !(logOnly && isDoneTap(w, e)));
+}
+
+/** Items a chore's entries can be logged on: anything that keeps a history (one animal or a whole group). */
+export function logTargets(w: World): { id: string; name: string; kind: string; group: boolean; partOf: string | null }[] {
+  return w.objects
+    .filter((o) => !o.archived_at && !isChore(typeOf(w, o)?.name) && (!isActivity(typeOf(w, o)?.name) || o.keep_log))
+    .map((o) => ({ id: o.id, name: o.name, kind: typeOf(w, o)?.name ?? '', group: o.is_group,
+      partOf: o.parent_id ? (w.objects.find((g) => g.id === o.parent_id)?.name ?? null) : null }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

@@ -1,12 +1,13 @@
 'use client';
 
 import { useActionState, useEffect, useState, useTransition } from 'react';
-import { addRule, addSlot, correctEvent, setArchived, setRuleCompletion, stopRule, stopSlot, updateDetails, type ActionResult } from '@/app/actions';
+import { addRule, addSlot, correctEvent, setArchived, setRuleCompletion, setRuleOwner, stopRule, stopSlot, updateDetails, type ActionResult } from '@/app/actions';
 import { isActivity } from '@/lib/types';
 import { ActivityFields } from './activity-fields';
 import { CHORE_PICTURES, ChoreIcon } from './chore-icons';
 import type { FieldDefRow, MemberRow, Visibility } from '@/lib/database.types';
 import { PhotoInput } from './photo-input';
+import type { PickableItem } from './item-picker';
 import { ScheduleFields } from './schedule-fields';
 import { useToast } from './toast';
 
@@ -95,11 +96,14 @@ function PicturePicker({ name, initial, label }: { name: string; initial: string
   );
 }
 
+/** What each visibility is called in the app. */
+export const VISIBILITY_LABEL: Record<Visibility, string> = { shared: 'Family', personal: 'Me + Folks', private: 'Private' };
+
 export function VisibilityPicker({ initial, canPrivate }: { initial: Visibility; canPrivate: boolean }) {
   const [vis, setVis] = useState<Visibility>(initial);
   const help: Record<Visibility, string> = {
     shared: 'The whole family sees it.',
-    personal: 'The owner and Mum and Dad see it.',
+    personal: 'The owner plus Mum and Dad see it.',
     private: 'Only the owner sees it. Not even Mum and Dad.',
   };
   return (
@@ -109,7 +113,7 @@ export function VisibilityPicker({ initial, canPrivate }: { initial: Visibility;
       <div className="wrap">
         {(['shared', 'personal', 'private'] as Visibility[]).map((v) => (
           <button key={v} type="button" className="chip" aria-pressed={vis === v} disabled={v === 'private' && !canPrivate} onClick={() => setVis(v)}>
-            {v[0].toUpperCase() + v.slice(1)}
+            {VISIBILITY_LABEL[v]}
           </button>
         ))}
       </div>
@@ -132,6 +136,7 @@ export function ItemActions(props: {
   canPrivate: boolean; defs: FieldDefRow[]; values: Record<string, unknown>; members: MemberRow[];
   ownerId: string; meId: string; today: string; canRemind: boolean;
   grouped?: boolean; groups?: GroupOption[]; isGroup?: boolean; parentId?: string | null; photoUrl?: string | null;
+  logTargets?: PickableItem[]; keepLog?: boolean;
 }) {
   const activity = isActivity(props.typeName);
   const [mode, setMode] = useState<'none' | 'edit' | 'reminder'>('none');
@@ -166,6 +171,13 @@ export function ItemActions(props: {
           <DetailFields defs={props.defs} values={props.values} members={props.members} grouped={!!props.grouped} groups={props.groups}
             isGroup={props.isGroup} parentId={props.parentId} selfId={props.objectId} photoUrl={props.photoUrl} />
           <VisibilityPicker initial={props.visibility} canPrivate={props.canPrivate} />
+          {activity && (
+            <label className="row" style={{ minHeight: 44 }}>
+              <input type="hidden" name="keep_log_field" value="1" />
+              <input type="checkbox" name="keep_log" defaultChecked={props.keepLog} style={{ width: 22, minHeight: 22 }} />
+              <span>Show in the Log, to keep a history of it</span>
+            </label>
+          )}
           {editState && !editState.ok && <p role="alert" style={{ margin: 0, fontWeight: 600 }}>{editState.error}</p>}
           <button className="btn btn-primary" disabled={editing}>{editing ? 'Saving…' : 'Save details'}</button>
         </form>
@@ -176,7 +188,7 @@ export function ItemActions(props: {
           <input type="hidden" name="object_id" value={props.objectId} />
           {activity
             ? <ActivityFields members={props.members} meId={props.meId} owner={props.ownerId} today={props.today} />
-            : <ScheduleFields typeName={props.typeName} members={props.members} owner={props.ownerId} meId={props.meId} today={props.today} />}
+            : <ScheduleFields typeName={props.typeName} members={props.members} owner={props.ownerId} meId={props.meId} today={props.today} logTargets={props.logTargets} />}
           {ruleState && !ruleState.ok && <p role="alert" style={{ margin: 0, fontWeight: 600 }}>{ruleState.error}</p>}
           <button className="btn btn-primary" disabled={addingRule}>{addingRule ? 'Saving…' : activity ? 'Add times' : 'Add reminder'}</button>
         </form>
@@ -322,5 +334,25 @@ export function DetailFields({ defs, values, members, grouped, groups = [], isGr
       )}
       {defs.filter((d) => (group ? d.key !== 'birth_year' : d.key !== 'head_count')).map(field)}
     </>
+  );
+}
+
+/** Change who does a chore (or one person's part of it). */
+export function RuleOwnerSelect({ ruleId, ownerId, members, meId }: { ruleId: string; ownerId: string; members: MemberRow[]; meId: string }) {
+  const [busy, start] = useTransition();
+  const [value, setValue] = useState(ownerId);
+  const toast = useToast();
+  return (
+    <label className="row" style={{ gap: 8 }}>
+      <span className="small">Who does it</span>
+      <select value={value} disabled={busy} style={{ flex: '1 1 auto' }} onChange={(e) => {
+        const next = e.target.value;
+        setValue(next);
+        start(async () => { const r = await setRuleOwner(ruleId, next); if (!r.ok) { setValue(ownerId); toast.show(r.error); } else if (r.message) toast.show(r.message); });
+      }}>
+        {members.map((m) => <option key={m.id} value={m.id}>{m.id === meId ? 'Me' : m.display_name}</option>)}
+      </select>
+      {toast.node}
+    </label>
   );
 }

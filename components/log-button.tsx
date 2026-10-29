@@ -155,11 +155,15 @@ export function DoneButton({ objectId, ruleId, kidName, label = 'Done', classNam
   return (
     <>
       <button type="button" className={className} style={style} disabled={busy}
-        onClick={() => start(async () => {
-          const r = await quickDone(objectId, ruleId);
-          if (!r.ok) { toast.show(r.error); return; }
-          celebrate({ message: kidName ? `Nice one, ${kidName}!` : null, undo: { eventId: r.eventId!, objectId, waiting: !!r.waiting } });
-        })}>
+        onClick={(e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          const at = { x: box.left + box.width / 2, y: box.top };
+          start(async () => {
+            const r = await quickDone(objectId, ruleId);
+            if (!r.ok) { toast.show(r.error); return; }
+            celebrate({ at, undo: { eventId: r.eventId!, objectId, waiting: !!r.waiting } });
+          });
+        }}>
         {busy ? '…' : label}
       </button>
       {toast.node}

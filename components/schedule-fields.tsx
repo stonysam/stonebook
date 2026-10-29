@@ -5,6 +5,7 @@ import type { MemberRow } from '@/lib/database.types';
 import { WEEKDAYS } from '@/lib/format';
 import { isChore, typeUi } from '@/lib/types';
 import { addDays, isoWeekday } from '@/src/engine/dates';
+import { ItemPicker, type PickableItem } from './item-picker';
 
 type How = 'none' | 'daily' | 'weekly' | 'interval' | 'meter' | 'date' | 'record';
 
@@ -13,16 +14,20 @@ type How = 'none' | 'daily' | 'weekly' | 'interval' | 'meter' | 'date' | 'record
  * In the Add form, things that fall due by nature (bills, documents, chores) ask up front;
  * for the rest (a car, a flock) a reminder is optional and starts folded away.
  */
-export function ScheduleFields({ typeName, members, owner, meId, today, inAddForm = false, onPeople }: {
+export function ScheduleFields({ typeName, members, owner, meId, today, inAddForm = false, onPeople, preselect = true, logTargets = [] }: {
   typeName: string; members: MemberRow[]; owner: string; meId: string; today: string; inAddForm?: boolean;
   /** Chores: tells the Add form who's doing it (a job for others or a group is always shared). */
   onPeople?: (ids: string[]) => void;
+  /** Chores: start with `owner` ticked under "Who does it?" (false: nobody until someone is picked). */
+  preselect?: boolean;
+  /** Chores with "Log details": the items its entries can be recorded against. */
+  logTargets?: PickableItem[];
 }) {
   const chore = isChore(typeName);
   const ui = typeUi(typeName);
   const hasMeter = typeName === 'Vehicle' || typeName === 'Machine';
   const options: [How, string][] = chore
-    ? [['date', 'Just once'], ['daily', 'Every day'], ['weekly', 'On set days'], ['interval', 'Every few weeks']]
+    ? [['date', 'Just once'], ['daily', 'Every day'], ['weekly', 'On set days'], ['interval', 'Regularly']]
     : [
         ['interval', 'Every few months'],
         ...(hasMeter ? [['meter', 'By km or hours'] as [How, string]] : []),
@@ -39,16 +44,16 @@ export function ScheduleFields({ typeName, members, owner, meId, today, inAddFor
   const [responsible, setResponsible] = useState<string | null>(null); // null: whoever looks after it
   // Chores: who does it, picked once. Several people on something that repeats either do it
   // together each time (each ticks their own part) or take turns by day.
-  const [people, setPeopleState] = useState<string[]>([owner]);
+  const [people, setPeopleState] = useState<string[]>(preselect ? [owner] : []);
   const [together, setTogether] = useState(true);
   const [dayOwner, setDayOwner] = useState<Record<number, string>>({});
-  const [by, setBy] = useState<'today' | 'tomorrow' | 'week' | 'pick'>('week');
+  const [by, setBy] = useState<'today' | 'tomorrow' | 'week' | 'month' | 'pick'>('week');
   const [picked, setPicked] = useState(addDays(today, 7));
   const [completion, setCompletion] = useState<'done' | 'log'>(chore ? 'done' : 'log');
 
   const who = responsible ?? owner;
   const setPeople = (ids: string[]) => { setPeopleState(ids); onPeople?.(ids); };
-  const togglePerson = (id: string) => setPeople(people.includes(id) ? (people.length > 1 ? people.filter((x) => x !== id) : people) : [...people, id]);
+  const togglePerson = (id: string) => setPeople(people.includes(id) ? people.filter((x) => x !== id) : [...people, id]);
   const repeating = how === 'daily' || how === 'weekly';
   const turns = chore && repeating && people.length > 1 && !together;
   const turnDays = how === 'daily' ? [1, 2, 3, 4, 5, 6, 7] : days;
@@ -57,7 +62,9 @@ export function ScheduleFields({ typeName, members, owner, meId, today, inAddFor
   const name = (id: string) => (id === meId ? 'Me' : members.find((m) => m.id === id)?.display_name ?? '');
   const toggleDay = (d: number) => setDays((cur) => (cur.includes(d) ? cur.filter((x) => x !== d) : [...cur, d].sort()));
   const sunday = addDays(today, (7 - isoWeekday(today)) % 7);
-  const dueOn = by === 'today' ? today : by === 'tomorrow' ? addDays(today, 1) : by === 'week' ? sunday : picked;
+  const [yy, mm] = today.split('-').map(Number);
+  const monthEnd = new Date(Date.UTC(yy, mm, 0)).toISOString().slice(0, 10); // last day of this calendar month
+  const dueOn = by === 'today' ? today : by === 'tomorrow' ? addDays(today, 1) : by === 'week' ? sunday : by === 'month' ? monthEnd : picked;
 
   if (!open) {
     return (
@@ -154,7 +161,7 @@ export function ScheduleFields({ typeName, members, owner, meId, today, inAddFor
         <div className="stack">
           <span className="small">Done by when?</span>
           <div className="wrap">
-            {([['today', 'Today'], ['tomorrow', 'Tomorrow'], ['week', 'This week'], ['pick', 'Pick a date']] as const).map(([v, l]) => (
+            {([['today', 'Today'], ['tomorrow', 'Tomorrow'], ['week', 'This week'], ['month', 'This month'], ['pick', 'Pick a date']] as const).map(([v, l]) => (
               <button key={v} type="button" className="chip" aria-pressed={by === v} onClick={() => setBy(v)}>{l}</button>
             ))}
           </div>
@@ -215,10 +222,11 @@ export function ScheduleFields({ typeName, members, owner, meId, today, inAddFor
               </div>
             ))}
           {!turns && people.length > 1 && people.map((id) => <input key={id} type="hidden" name="people" value={id} />)}
-          {inAddForm && <input type="hidden" name="owner_id" value={people[0]} />}
+          {inAddForm && people[0] && <input type="hidden" name="owner_id" value={people[0]} />}
+          {people.length === 0 && <span className="small">Pick who does it.</span>}
         </fieldset>
       )}
-      <input type="hidden" name="responsible" value={chore ? people[0] : who} />
+      <input type="hidden" name="responsible" value={chore ? (people[0] ?? '') : who} />
 
       {how !== 'none' && how !== 'record' && (
         <fieldset className="stack" style={{ border: 0, padding: 0, margin: 0 }}>
@@ -228,7 +236,10 @@ export function ScheduleFields({ typeName, members, owner, meId, today, inAddFor
             <button type="button" role="radio" aria-checked={completion === 'done'} className={completion === 'done' ? 'on' : ''} onClick={() => setCompletion('done')}>Tap Done</button>
             <button type="button" role="radio" aria-checked={completion === 'log'} className={completion === 'log' ? 'on' : ''} onClick={() => setCompletion('log')}>Log details</button>
           </div>
-          <span className="small">{completion === 'done' ? 'One tap and it’s done, with hearts. Good for chores.' : 'Opens a form for a date, a note or a reading. Good for services and repairs.'}</span>
+          <span className="small">{chore
+            ? (completion === 'done' ? 'One tap and it’s done, with hearts. Nothing is logged.' : 'Logged in an item’s history, like cleaning the coop going into the hens’ log. Today shows Log instead of Done.')
+            : (completion === 'done' ? 'One tap and it’s done, with hearts. Good for chores.' : 'Opens a form for a date, a note or a reading. Good for services and repairs.')}</span>
+          {chore && completion === 'log' && logTargets.length > 0 && <ItemPicker items={logTargets} name="logs_to" label="Log it on" />}
         </fieldset>
       )}
     </fieldset>

@@ -1,23 +1,47 @@
 import Link from '@/components/link';
 import { AddForm } from '@/components/add-form';
 import { KindIcon } from '@/components/kind-icon';
-import { loadWorld } from '@/lib/world';
-import { isActivity } from '@/lib/types';
+import { loadWorld, logTargets } from '@/lib/world';
+import { ACTIVITY, CHORE, isActivity } from '@/lib/types';
 
 export const metadata = { title: 'Add · Stonebook' };
 
-export default async function Add({ searchParams }: { searchParams: Promise<{ type?: string; owner?: string; parent?: string }> }) {
+export default async function Add({ searchParams }: { searchParams: Promise<{ type?: string; owner?: string; parent?: string; all?: string }> }) {
   const w = await loadWorld();
-  const { type: typeId, owner, parent } = await searchParams;
+  const { type: typeId, owner, parent, all } = await searchParams;
   const type = w.types.find((t) => t.id === typeId);
 
   if (w.me.role === 'child') {
     return <main className="page"><h1>Add</h1><p>Ask Mum or Dad to add things for you.</p></main>;
   }
 
+  // The Add tab: the two things added most, big and stacked. Everything else is added from the Log.
+  if (!type && all !== '1') {
+    const pick = (name: string) => w.types.find((t) => t.name === name);
+    const big = [[pick(CHORE), 'Chore or task', 'Something to do, once or regularly'], [pick(ACTIVITY), 'Activity', 'Scouts, band, work, an appointment']] as const;
+    return (
+      <main className="page">
+        <h1>Add</h1>
+        <div className="stack" style={{ gap: 12 }}>
+          {big.filter(([t]) => t).map(([t, label, hint]) => (
+            <Link key={t!.id} href={`/add?type=${t!.id}${owner ? `&owner=${owner}` : ''}`} className="card add-big">
+              <KindIcon name={t!.icon} size={40} />
+              <span className="stack" style={{ gap: 2 }}>
+                <span style={{ fontSize: 22, fontWeight: 600 }}>{label}</span>
+                <span className="small">{hint}</span>
+              </span>
+            </Link>
+          ))}
+        </div>
+        <p className="small" style={{ margin: 0 }}>To add a car, an animal, a bill or anything else that keeps a history, use Add in the <Link href="/log">Log</Link>.</p>
+      </main>
+    );
+  }
+
   if (!type) {
     return (
       <main className="page">
+        <Link href="/log" className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>Back to Log</Link>
         <h1>Add something</h1>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(104px, 1fr))', gap: 10 }}>
           {w.types.filter((t) => !t.hidden).map((t) => (
@@ -37,7 +61,7 @@ export default async function Add({ searchParams }: { searchParams: Promise<{ ty
   const owners = w.me.role === 'parent' || type.assignable ? w.members : w.members.filter((m) => m.id === w.me.id);
   return (
     <main className="page">
-      <Link href="/add" className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>Back</Link>
+      <Link href={type.assignable || isActivity(type.name) ? '/add' : `/log/${type.id}`} className="btn btn-text" style={{ alignSelf: 'flex-start', padding: 0 }}>Back</Link>
       <h1>{type.groups ? 'New animal or group' : isActivity(type.name) ? 'New activity' : `New ${type.name.toLowerCase()}`}</h1>
       <AddForm
         typeId={type.id}
@@ -49,6 +73,8 @@ export default async function Add({ searchParams }: { searchParams: Promise<{ ty
         isParent={w.me.role === 'parent'}
         today={w.today}
         initialOwner={owners.some((m) => m.id === owner) ? owner! : w.me.id}
+        preselect={owners.some((m) => m.id === owner)}
+        logTargets={type.assignable ? logTargets(w) : []}
         grouped={type.groups}
         groups={groups}
         parentId={groups.some((g) => g.id === parent) ? parent! : null}

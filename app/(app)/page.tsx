@@ -1,3 +1,4 @@
+import type { ObjectRow, RuleRow } from '@/lib/database.types';
 import Link from '@/components/link';
 import { Avatar, Avatars } from '@/components/avatar';
 import { AbortButton, DoneButton, LogButton } from '@/components/log-button';
@@ -12,6 +13,9 @@ import {
 import { addDays } from '@/src/engine/dates';
 
 export const metadata = { title: 'Today · Stonebook' };
+
+/** Reminder names that just mean "do it": not worth repeating under the title, the button says it. */
+const GENERIC_RULE_NAMES = ['Done', 'Do it', 'Due', 'Reminder'];
 
 const SECTIONS: [DueRow['bucket'], string][] = [
   ['overdue', 'Overdue'], ['week', 'This week'], ['month', 'This month'], ['setup', 'Waiting for a start date'],
@@ -35,6 +39,13 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
   const waitingObjects = new Set(w.pending.filter((p) => p.created_by === me.id).map((p) => p.object_id));
   const myPendingApprovals = me.role === 'parent' ? w.pending.length : 0;
   const recent = recentThings(w);
+  // A chore that logs to an item (cleaning the coop) opens the Log sheet for that item.
+  const logTarget = (o: ObjectRow, rule: RuleRow) => {
+    const target = rule.logs_to ? w.objects.find((x) => x.id === rule.logs_to) : undefined;
+    return target
+      ? { objectId: target.id, objectName: target.name, kinds: [rule.event_kind || o.name], meterUnit: meterUnitFor(w, target.id), ruleId: rule.id, meId: me.id }
+      : { objectId: o.id, objectName: o.name, kinds: suggestedKinds(w, o.id), meterUnit: meterUnitFor(w, o.id), ruleId: rule.id, turns: turnsOf(w, o.id), meId: me.id };
+  };
   const plans = [w.today, addDays(w.today, 1)].flatMap((d) => sessionsOn(w, d))
     .filter((s) => view === 'family' || s.people.includes(me.id) || s.dropOffBy === me.id || s.pickUpBy === me.id);
   const { drivers, names } = driverOptions(w);
@@ -89,7 +100,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                   <Link href={`/things/${c.object.id}`} className="card-link" style={{ flex: '1 1 auto', minWidth: 0 }}>
                     <span className="item-title">{c.object.name}</span>
                     <span>
-                      <span className="muted">{lead.rule.name} · </span>
+                      {!GENERIC_RULE_NAMES.includes(lead.rule.name) && <span className="muted">{lead.rule.name} · </span>}
                       <span className={c.bucket === 'overdue' ? 'overdue' : 'muted'}>
                         {c.bucket === 'setup' ? 'not started' : whenText(c.dueOn, w.today)}
                       </span>
@@ -105,8 +116,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
                       <DoneButton objectId={c.object.id} ruleId={mine.rule.id} kidName={kid ? me.display_name : null} style={{ minWidth: 72 }} />
                     ) : (
                       <LogButton
-                        target={{ objectId: c.object.id, objectName: c.object.name, kinds: suggestedKinds(w, c.object.id), meterUnit: meterUnitFor(w, c.object.id),
-                          ruleId: (mine ?? lead).rule.id, turns: turnsOf(w, c.object.id), meId: me.id }}
+                        target={logTarget(c.object, (mine ?? lead).rule)}
                         today={w.today}
                         kidName={kid ? me.display_name : null}
                         label="Log"

@@ -13,7 +13,16 @@
   background: var(--surface); color: var(--text); font-family: var(--font-display); font-weight: 600; font-size: 26px;
   box-shadow: var(--shadow); white-space: nowrap; animation: hearts-msg 3.6s ease forwards; }
 @keyframes hearts-msg { 0% { opacity: 0; transform: translate(-50%, 12px); } 12%, 82% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+/* Three hearts from the Done button: rise slowly, sway, fade */
+.heart-pop { position: fixed; opacity: 0; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .2));
+  animation: heart-pop 2.4s cubic-bezier(.25, .6, .4, 1) forwards; }
+@keyframes heart-pop {
+  0%   { transform: translate(0, 0) scale(.4); opacity: 0; }
+  15%  { transform: translate(0, -18px) scale(1.1); opacity: 1; }
+  60%  { transform: translate(var(--drift), -90px) scale(1); opacity: 1; }
+  100% { transform: translate(calc(var(--drift) * -.5), -150px) scale(.9); opacity: 0; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .heart { display: none; }
+  .heart, .heart-pop { display: none; }
   .hearts-msg { animation-duration: 3s; }
 }

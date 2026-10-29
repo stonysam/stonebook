@@ -1,4 +1,5 @@
 import Link from '@/components/link';
+import { VISIBILITY_LABEL } from '@/components/item-tools';
 import { notFound } from 'next/navigation';
 import { Avatar } from '@/components/avatar';
 import { ColorPicker } from '@/components/color-picker';
@@ -107,7 +108,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
         {others.map((o) => (
           <Link key={o.id} href={`/things/${o.id}`} className="card card-link">
             <span className="item-title">{o.name}</span>
-            <span className="small">{typeOf(w, o)?.name}{o.visibility !== 'shared' ? ` · ${o.visibility}` : ''}</span>
+            <span className="small">{typeOf(w, o)?.name}{o.visibility !== 'shared' ? ` · ${VISIBILITY_LABEL[o.visibility]}` : ''}</span>
           </Link>
         ))}
       </section>

@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import Link from '@/components/link';
 import { FamilyTablet } from '@/components/family-tablet';
 import { CalendarLink, PushToggle } from '@/components/reminder-settings';
+import { FeedDays } from '@/components/feed-days';
 import { getMe } from '@/lib/auth';
 
 export const metadata = { title: 'Settings · Stonebook' };
@@ -32,6 +33,7 @@ export default async function Settings() {
             </p>
           )}
           <CalendarLink url={link ? `${origin}/cal/${link.token}.ics` : null} />
+          <FeedDays initial={me.feed_days ?? 14} />
           <Link href="/settings/whats-new" className="card card-link">
             <span className="item-title">What’s new</span>
             <span className="small">Every change to Stonebook, newest first.</span>
