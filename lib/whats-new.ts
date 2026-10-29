@@ -20,6 +20,20 @@ export interface Note {
 
 export const NOTES: Note[] = [
   {
+    id: '2026-10-29-the-log',
+    date: '2026-10-29',
+    title: 'Things is now the Log',
+    intro: 'From your feedback:',
+    points: [
+      'The Log opens on boxes for each kind of thing. Tap one, then an item, to see its history.',
+      'Chores and tasks can be logged on an item, like cleaning the coop going into the hens’ history.',
+      'Add is now two big buttons: Chore or task, and Activity. Add cars, animals and bills from the Log.',
+      'Choose how long things stay in your Feed in Settings.',
+    ],
+    href: '/log',
+    audience: 'everyone',
+  },
+  {
     id: '2026-10-21-icons-and-tidy-ups',
     date: '2026-10-21',
     title: 'Icons, and a few tidy-ups',
