@@ -57,7 +57,7 @@ type Celebrate = {
   message?: string | null;
   /** Where the Done button is: three hearts rise from it instead of the full-screen shower. */
   at?: { x: number; y: number };
-  undo?: { eventId: string; objectId: string; waiting: boolean };
+  undo?: { eventId: string | string[]; objectId: string; waiting: boolean; label?: string };
 };
 const EVENT = 'stonebook:celebrate';
 
@@ -95,7 +95,7 @@ export function CelebrationHost() {
         : <Hearts key={hearts.key} message={hearts.message} onDone={end} />)}
       {undo && (
         <div className="toast row" role="status">
-          <span style={{ flex: '1 1 auto' }}>{undo.waiting ? 'Done. Mum or Dad will check it.' : 'Done.'}</span>
+          <span style={{ flex: '1 1 auto' }}>{undo.waiting ? 'Done. Mum or Dad will check it.' : (undo.label ?? 'Done.')}</span>
           <button type="button" className="btn btn-text" style={{ color: 'var(--bg)', minHeight: 32 }}
             onClick={() => start(async () => { const u = undo; setUndo(null); const r = await undoDone(u.eventId, u.objectId); toast.show(r.ok ? 'Undone.' : r.error); })}>
             Undo

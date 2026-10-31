@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { abortMission, logEvent, quickDone } from '@/app/actions';
+import { abortMission, logEvent, quickDoneFor } from '@/app/actions';
 import { addDays } from '@/src/engine/dates';
 import { celebrate } from './hearts';
 import { useToast } from './toast';
@@ -146,9 +146,13 @@ function LogSheet({ target, today, onClose, onLogged }: {
   );
 }
 
-/** One tap: done today, hearts float up, and "Undo" for a few seconds (shown by CelebrationHost). */
-export function DoneButton({ objectId, ruleId, kidName, label = 'Done', className = 'btn btn-primary', style }: {
-  objectId: string; ruleId: string | null; kidName?: string | null; label?: string; className?: string; style?: React.CSSProperties;
+/**
+ * One tap: done today, hearts rise from the button, and "Undo" for a few seconds (shown by CelebrationHost).
+ * `ruleIds` marks several parts at once (every open part of a group job).
+ */
+export function DoneButton({ objectId, ruleId, ruleIds, doneLabel, label = 'Done', className = 'btn btn-primary', style }: {
+  objectId: string; ruleId?: string | null; ruleIds?: string[]; doneLabel?: string; kidName?: string | null;
+  label?: string; className?: string; style?: React.CSSProperties;
 }) {
   const [busy, start] = useTransition();
   const toast = useToast();
@@ -159,9 +163,9 @@ export function DoneButton({ objectId, ruleId, kidName, label = 'Done', classNam
           const box = e.currentTarget.getBoundingClientRect();
           const at = { x: box.left + box.width / 2, y: box.top };
           start(async () => {
-            const r = await quickDone(objectId, ruleId);
+            const r = await quickDoneFor(objectId, ruleIds?.length ? ruleIds : [ruleId ?? null]);
             if (!r.ok) { toast.show(r.error); return; }
-            celebrate({ at, undo: { eventId: r.eventId!, objectId, waiting: !!r.waiting } });
+            celebrate({ at, undo: { eventId: r.eventIds!, objectId, waiting: !!r.waiting, label: doneLabel } });
           });
         }}>
         {busy ? '…' : label}

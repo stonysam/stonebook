@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/auth', () => ({ getMe: vi.fn() }));
 vi.mock('react', async (orig) => ({ ...(await orig<typeof import('react')>()), cache: <T,>(fn: T) => fn }));
 
-const { dueFor, suggestedKinds, toEngineRule, canEditObject, recentThings, sessionsOn, choresOf, kidToday, historyOf, inLog, isDoneTap } = await import('../lib/world');
+const { dueFor, suggestedKinds, toEngineRule, canEditObject, recentThings, sessionsOn, choresOf, kidToday, historyOf, inLog, isDoneTap, dueCards, allDue } = await import('../lib/world');
 const { whenText } = await import('../lib/format');
 import type { EventRow, MemberRow, ObjectRow, RuleRow } from '../lib/database.types';
 import type { World } from '../lib/world';
@@ -186,5 +186,17 @@ describe('the Log', () => {
     expect(historyOf(w, hens, { logOnly: true }).map((e) => e.id)).toEqual(['e1']);
     expect(historyOf(w, coop).map((e) => e.id)).toEqual(['e1']);
     expect(isDoneTap(w, w.events[1])).toBe(true);
+  });
+});
+
+describe('group jobs on the Whole family list', () => {
+  it('a part ticked by someone else counts for the person it belongs to', () => {
+    const w = world([
+      rule('sam-part', 'hens', { kind: 'weekly', weekdays: [7], completion: 'done', owner_id: 'sam' }),
+      rule('lucy-part', 'hens', { kind: 'weekly', weekdays: [7], completion: 'done', owner_id: 'lucy' }),
+    ], [{ ...event('e1', 'hens', 'Done', '2026-10-18'), rule_id: 'lucy-part', created_by: 'sam', data: { quick: true } }]);
+    const card = dueCards(w, allDue(w).filter((d) => d.object.id === 'hens'))[0];
+    expect(card.people.sort()).toEqual(['lucy', 'sam']);
+    expect(card.donePeople).toEqual(['lucy']);
   });
 });

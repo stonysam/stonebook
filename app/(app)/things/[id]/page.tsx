@@ -57,7 +57,10 @@ export default async function ItemPage({ params, searchParams }: {
   const kid = w.me.role === 'junior' || w.me.role === 'child';
   const owner = o.owner_id === w.me.id ? 'you' : memberName(w, o.owner_id);
   const activity = isActivity(type?.name);
-  const myDone = rules.find((d) => d.rule.owner_id === w.me.id && d.rule.completion === 'done' && d.due.status !== 'done');
+  const openDone = rules.filter((d) => d.rule.completion === 'done' && !d.rule.logs_to && d.due.status !== 'done' && d.rule.kind !== 'record');
+  const myDone = openDone.find((d) => d.rule.owner_id === w.me.id);
+  // Someone else's Done-style chore (or the open parts of a group job): anyone who sees it can tick it off.
+  const othersDone = myDone ? [] : openDone;
   const slots = w.slots.filter((x) => x.object_id === o.id);
   const sessions = activity ? upcomingSessions(w, o.id).slice(0, 8) : [];
   const { drivers, names } = driverOptions(w);
@@ -99,6 +102,16 @@ export default async function ItemPage({ params, searchParams }: {
                 />
                 {groupMates(w, myDone.rule).length > 0 && <AbortButton objectId={o.id} ruleId={myDone.rule.id} />}
               </div>
+            </div>
+          ) : othersDone.length > 0 ? (
+            <div className="stack" style={{ gap: 4 }}>
+              <DoneButton objectId={o.id} ruleIds={othersDone.map((d) => d.rule.id)} className="btn btn-primary btn-big btn-block"
+                label={othersDone.length > 1 ? 'Mark done for everyone' : `Mark done for ${memberName(w, othersDone[0].rule.owner_id)}`}
+                doneLabel={othersDone.length > 1 ? 'Done for everyone.' : `Done for ${memberName(w, othersDone[0].rule.owner_id)}.`} />
+              <LogButton
+                target={{ objectId: o.id, objectName: o.name, kinds: suggestedKinds(w, o.id), meterUnit: meterUnitFor(w, o.id), turns: turnsOf(w, o.id), meId: w.me.id }}
+                today={w.today} kidName={kid ? w.me.display_name : null} label="Log with a note or date" className="btn btn-text"
+              />
             </div>
           ) : (
             <LogButton

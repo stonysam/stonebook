@@ -502,27 +502,41 @@ export async function kidDone(input: { childId: string; objectId: string; ruleId
 // Done in one tap (with undo), abort mission, and the Done-or-Log switch
 // ---------------------------------------------------------------------------
 export async function quickDone(objectId: string, ruleId: string | null): Promise<ActionResult & { eventId?: string }> {
-  const { supabase, me } = await getMe();
-  const { data: rule } = ruleId ? await supabase.from('rules').select('event_kind').eq('id', ruleId).single() : { data: null };
-  const id = crypto.randomUUID();
-  const { data, error } = await supabase.from('events').insert({
-    id, root_id: id, object_id: objectId, kind: rule?.event_kind || 'Done', occurred_on: todayIn(), created_by: me.id, rule_id: ruleId,
-    data: { quick: true },
-  }).select('needs_confirmation').single();
-  if (error) return fail('Couldn’t save that. Try again.');
-  done();
-  return { ok: true, waiting: data?.needs_confirmation ?? false, eventId: id };
+  const r = await quickDoneFor(objectId, ruleId ? [ruleId] : [null]);
+  return r.ok ? { ...r, eventId: r.eventIds?.[0] } : r;
 }
 
-export async function undoDone(eventId: string, objectId: string): Promise<ActionResult> {
+/**
+ * One-tap Done for one or more reminders on an item: your own part, someone else's, or every
+ * open part of a group job. Each part gets its own entry, recorded as done by you.
+ */
+export async function quickDoneFor(objectId: string, ruleIds: (string | null)[]): Promise<ActionResult & { eventIds?: string[] }> {
   const { supabase, me } = await getMe();
-  const { data: original } = await supabase.from('events').select('kind, occurred_on').eq('id', eventId).single();
-  if (!original) return fail('Couldn’t undo that.');
-  const id = crypto.randomUUID();
-  const { error } = await supabase.from('events').insert({
-    id, root_id: id, object_id: objectId, kind: original.kind, occurred_on: original.occurred_on, correction_of: eventId, voided: true,
-    note: 'Undone', created_by: me.id,
+  const ids = [...new Set(ruleIds)].slice(0, 20);
+  if (ids.length === 0) return fail('Nothing to mark.');
+  const { data: rules } = await supabase.from('rules').select('id, event_kind, object_id').in('id', ids.filter((x): x is string => !!x));
+  if (ids.some((id) => id && !rules?.some((r) => r.id === id && r.object_id === objectId))) return fail('That reminder belongs to a different item.');
+  const rows = ids.map((ruleId) => {
+    const id = crypto.randomUUID();
+    return { id, root_id: id, object_id: objectId, kind: rules?.find((r) => r.id === ruleId)?.event_kind || 'Done',
+      occurred_on: todayIn(), created_by: me.id, rule_id: ruleId, data: { quick: true } };
   });
+  const { data, error } = await supabase.from('events').insert(rows).select('needs_confirmation');
+  if (error) return fail('Couldn’t save that. Try again.');
+  done();
+  return { ok: true, waiting: (data ?? []).some((d) => d.needs_confirmation), eventIds: rows.map((r) => r.id) };
+}
+
+export async function undoDone(eventId: string | string[], objectId: string): Promise<ActionResult> {
+  const { supabase, me } = await getMe();
+  const ids = (Array.isArray(eventId) ? eventId : [eventId]).slice(0, 20);
+  const { data: originals } = await supabase.from('events').select('id, kind, occurred_on').in('id', ids);
+  if (!originals?.length) return fail('Couldn’t undo that.');
+  const { error } = await supabase.from('events').insert(originals.map((o) => {
+    const id = crypto.randomUUID();
+    return { id, root_id: id, object_id: objectId, kind: o.kind, occurred_on: o.occurred_on, correction_of: o.id, voided: true,
+      note: 'Undone', created_by: me.id };
+  }));
   if (error) return fail('Couldn’t undo that.');
   done();
   return { ok: true, message: 'Undone.' };
